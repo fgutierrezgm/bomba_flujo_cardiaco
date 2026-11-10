@@ -25,7 +25,7 @@ def ruta_p(archivo):
 
 
 ens = Ensamblaje("Ensamblaje_Bomba", SALIDA, explosion_inicial="0.0")
-ens.parametro_global(3, "pos_embolo", "130.00 mm", "Posición axial Z del émbolo de Delrin (carrera)", origen="usuario")
+ens.parametro_global(4, "pos_embolo", "130.00 mm", "Posición axial Z del émbolo de Delrin (carrera)", origen="usuario")
 
 # 1. Tapa Interior (Plano 16b), Cilindro de Vidrio (Plano 9) y Tapa Exterior (Plano 16a) encadenados por LCS
 tapa_int = ens.insertar(

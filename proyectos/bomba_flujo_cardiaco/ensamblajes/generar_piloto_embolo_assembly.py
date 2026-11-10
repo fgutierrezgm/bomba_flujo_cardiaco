@@ -232,6 +232,53 @@ def aplicar_apariencia_piloto(doc, asm):
                     vo.ShapeMaterial = mat
 
 
+def asegurar_hoja_parametros_generales(doc, asm):
+    """Crea o recupera la hoja Parametros_Generales con explosion y modo_diseno_global."""
+    pg = doc.getObject("Parametros_Generales")
+    if pg is None:
+        pg = asm.newObject("Spreadsheet::Sheet", "Parametros_Generales")
+        pg.set("A1", "PARÁMETRO"); pg.set("B1", "VALOR"); pg.set("C1", "DESCRIPCIÓN")
+        pg.set("A2", "Factor de explosión"); pg.set("B2", "0.0")
+        pg.setAlias("B2", "explosion")
+        pg.set("C2", "0.0 = Ensamblado | 1.0 = Vista Explotada")
+
+        pg.set("A3", "Modo de diseño global"); pg.set("B3", "3")
+        pg.setAlias("B3", "modo_diseno_global")
+        pg.set("C3", "1 = Impresión 3D | 2 = CNC/Planos | 3 = Render (sincroniza todas las piezas vinculadas)")
+        doc.recompute()
+    return pg
+
+
+def sincronizar_modo_diseno_piezas_piloto(doc, pg):
+    try:
+        val_raw = pg.get("modo_diseno_global")
+        if val_raw is None:
+            return
+        modo_global = int(float(str(val_raw).strip()))
+    except Exception:
+        return
+
+    docs_hijos = set()
+    for o in getattr(doc, "Objects", []):
+        if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None):
+            lo = o.LinkedObject
+            dh = getattr(lo, "Document", None)
+            if dh and dh != doc:
+                docs_hijos.add(dh)
+
+    for dh in docs_hijos:
+        sp = dh.getObject("Parametros")
+        if sp and hasattr(sp, "getAlias") and sp.getAlias("B2") == "modo_diseno":
+            try:
+                cur = int(float(str(sp.get("B2")).strip()))
+            except Exception:
+                cur = None
+            if cur != modo_global:
+                sp.set("B2", str(modo_global))
+                dh.recompute()
+    doc.recompute()
+
+
 def main():
     print("FreeCAD", ".".join(App.Version()[:3]))
     nombre_doc = "Piloto_Embolo_Assembly"
@@ -259,6 +306,7 @@ def main():
         asm = doc.addObject("Assembly::AssemblyObject", nombre_doc)
         asm.Label = nombre_doc
 
+    pg = asegurar_hoja_parametros_generales(doc, asm)
     jg = UtilsAssembly.getJointGroup(asm)
 
     # 1. Insertar/recuperar componentes (App::Link)
@@ -450,6 +498,7 @@ def main():
     print(f"Estado del solver Assembly (0 = resuelto): {res_solver}")
 
     aplicar_apariencia_piloto(doc, asm)
+    sincronizar_modo_diseno_piezas_piloto(doc, pg)
     doc.recompute()
     doc.saveAs(RUTA_SALIDA)
     print("Guardado:", RUTA_SALIDA)

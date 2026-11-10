@@ -767,8 +767,41 @@ class Ensamblaje:
         ss.setAlias("B2", "explosion")
         ss.set("C2", "0.0 = Ensamblado | 1.0 = Vista Explotada (admite valores intermedios)")
         ss.set("F2", "usuario")
+        ss.set("A3", "Modo de diseño global"); ss.set("B3", "3")
+        ss.setAlias("B3", "modo_diseno_global")
+        ss.set("C3", "1 = Impresión 3D | 2 = CNC/Planos | 3 = Render (sincroniza todas las piezas)")
+        ss.set("F3", "usuario")
         self.doc.recompute()
         return ss
+
+    def sincronizar_modo_diseno_piezas(self):
+        try:
+            val_raw = self.hoja.get("modo_diseno_global")
+            if val_raw is None:
+                return
+            modo_global = int(float(str(val_raw).strip()))
+        except Exception:
+            return
+
+        docs_hijos = set()
+        for o in getattr(self.doc, "Objects", []):
+            if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None):
+                lo = o.LinkedObject
+                dh = getattr(lo, "Document", None)
+                if dh and dh != self.doc:
+                    docs_hijos.add(dh)
+
+        for dh in docs_hijos:
+            sp = dh.getObject("Parametros")
+            if sp and hasattr(sp, "getAlias") and sp.getAlias("B2") == "modo_diseno":
+                try:
+                    cur = int(float(str(sp.get("B2")).strip()))
+                except Exception:
+                    cur = None
+                if cur != modo_global:
+                    sp.set("B2", str(modo_global))
+                    dh.recompute()
+        self.doc.recompute()
 
     def parametro_global(self, fila, alias, valor, descripcion="", origen="usuario"):
         ss = self.hoja
@@ -1015,6 +1048,7 @@ class Ensamblaje:
             if o.TypeId in ("App::Origin", "App::Plane", "App::Line") or o.isDerivedFrom("Part::Datum"):
                 o.Visibility = False
         self.asm.Visibility = True
+        self.sincronizar_modo_diseno_piezas()
         self.doc.recompute()
 
         # Re-aplicar apariencia visual tras recompute si estamos en GUI
