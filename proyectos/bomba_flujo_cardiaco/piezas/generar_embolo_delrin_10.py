@@ -27,10 +27,10 @@ DIMS = [
     ("d_cor_m3",    "Corona de agujeros roscados M3 (4x por cara)", "37.40 mm",  "L", None,      "plano"),
     ("d_m3",        "Rosca M3x0.5 (4x en cada cara)",               "3.00 mm",   "R", "2.50 mm", "plano"),
     ("p_m3",        "Profundidad roscas M3x0.5",                    "8.00 mm",   "L", None,      "plano"),
-    ("d_m8",        "Rosca M8x1.25 - 6H para sensores (2x)",        "8.00 mm",   "R", "6.80 mm", "plano"),
-    ("p_m8",        "Profundidad roscas M8x1.25 (igual a M3)",      "8.00 mm",   "L", None,      "supuesto"),
-    ("ang_m8_1",    "Ángulo sensor M8 en cara Z=0",                 "135 deg",   "N", None,      "plano"),
-    ("ang_m8_2",    "Ángulo sensor M8 en cara Z=h_total",           "45 deg",    "N", None,      "plano"),
+    ("d_m8",        "Rosca ciega M8x1.25 - 6H para topes FC (2x)",  "8.00 mm",   "R", "6.80 mm", "plano"),
+    ("p_m8",        "Profundidad roscas ciegas M8x1.25 (sin fuga)", "8.00 mm",   "L", None,      "usuario"),
+    ("ang_m8_1",    "Ángulo tope FC en cara Z=0 (hacia Tapa 16b)",  "45 deg",    "N", None,      "usuario"),
+    ("ang_m8_2",    "Ángulo tope FC en cara Z=h_total (Tapa 16a)",  "315 deg",   "N", None,      "usuario"),
 ]
 
 pz = Pieza("Embolo_Delrin_10")

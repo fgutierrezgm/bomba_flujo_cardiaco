@@ -32,6 +32,7 @@ DIMS = [
     ("d_avell",    "Diámetro avellanado agujeros brida",       "4.00 mm",  "H", None, "plano"),
     ("p_avell",    "Profundidad avellanado 90° en brida",      "0.45 mm",  "L", None, "plano"),
     ("c_chaf",     "Chaflanes 0.50 x 45°",                     "0.50 mm",  "L", None, "plano"),
+    ("z_asiento_eje", "Cota axial asiento con Adaptador Eje",  "5.50 mm",  "L", None, "calculado"),
 ]
 
 pz = Pieza("Adaptador_Rodamiento_03")
@@ -83,6 +84,7 @@ solido = pz.corte("Adaptador_Rodamiento_Solido", cuerpo, vaciado)
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
 pz.lcs("LCS_Cara_Brida", z=p("h_brida"))
+pz.lcs("LCS_Asiento_Adaptador_Eje", z=p("z_asiento_eje"))
 pz.lcs("LCS_Asiento_Rodamiento_6201", z=z_piso_rod)
 pz.lcs("LCS_Tope_Superior", z=p("h_total"))
 

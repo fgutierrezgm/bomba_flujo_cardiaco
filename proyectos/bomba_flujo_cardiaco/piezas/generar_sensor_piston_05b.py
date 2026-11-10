@@ -15,8 +15,8 @@ SALIDA = os.path.join(AQUI, "Sensor_Piston_05b.FCStd")
 
 # (alias, descripción, nominal, tipo, mecha, origen)
 DIMS = [
-    ("d_m8",    "Rosca exterior M8x0.5 - 6g",             "8.00 mm",  "R", "8.00 mm", "plano"),
-    ("paso_m8", "Paso rosca M8 (ver contradicción Pl.10)", "0.50 mm", "N", None,      "plano"),
+    ("d_m8",    "Rosca exterior M8x1.25 - 6g",            "8.00 mm",  "R", "8.00 mm", "usuario"),
+    ("paso_m8", "Paso rosca M8 (unificado con Plano 10)", "1.25 mm",  "N", None,      "usuario"),
     ("l_vast",  "Longitud del vástago roscado",           "8.00 mm",  "L", None,      "plano"),
     ("d_cab",   "Diámetro exterior de la cabeza",         "20.00 mm", "S", None,      "plano"),
     ("h_cab",   "Altura de la cabeza (total 15 mm)",      "7.00 mm",  "L", None,      "plano"),
@@ -25,7 +25,7 @@ DIMS = [
 
 pz = Pieza("Sensor_Piston_05b")
 pz.parametros(DIMS, modo=MODO_DISENO)
-pz.materiales("Acero_Inoxidable")
+pz.materiales("Acero_Inox_430", origen="usuario")
 p = pz.p
 
 r_cab = f"({p('d_cab')} / 2)"

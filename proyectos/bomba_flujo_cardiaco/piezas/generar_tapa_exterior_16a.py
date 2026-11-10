@@ -91,7 +91,10 @@ solido = pz.corte("Tapa_Exterior_Solido", cuerpo, vaciado)
 
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
+pz.lcs("LCS_Asiento_Sufridera_Ext", z=z_piso[2])
+pz.lcs("LCS_Piso_Tubo_110_5", z=z_piso[2])
 pz.lcs("LCS_Asiento_Carcasa_145mm", z=p("h_base"))
+pz.lcs("LCS_Tope_Resalte", z=z_tope)
 pz.lcs("LCS_Racor_G1_8_Sup", y=f"{p('d_c75')} / 2")
 pz.lcs("LCS_Racor_G1_8_Inf", y=f"-1 * {p('d_c75')} / 2")
 pz.lcs("LCS_Puerto_M12x1", x=f"({p('d_c75')} / 2) * cos({p('ang_m12')})",

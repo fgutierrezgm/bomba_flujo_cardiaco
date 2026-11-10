@@ -23,6 +23,7 @@ DIMS = [
     ("p_rosca",    "Profundidad roscada M10x1.5",          "16.00 mm",  "L", None,      "plano"),
     ("p_aguj",     "Profundidad agujero extremo izq.",     "19.00 mm",  "L", None,      "plano"),
     ("p_aguj_der", "Profundidad agujero extremo der.",     "16.00 mm",  "L", None,      "plano"),
+    ("z_est1",     "Posición axial Estructura Interior 1", "102.00 mm", "L", None,      "calculado"),
 ]
 
 pz = Pieza("Tensor_06")
@@ -50,6 +51,7 @@ solido = pz.corte("Tensor_Solido", cuerpo, vaciado)
 
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
+pz.lcs("LCS_Asiento_Estructura_1", z=p("z_est1"))
 pz.lcs("LCS_Centro_223", z=p("l_tramo1"))
 pz.lcs("LCS_Extremo_Der", z=p("l_total"))
 

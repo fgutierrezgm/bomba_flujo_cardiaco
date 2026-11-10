@@ -9,8 +9,10 @@ porqué de cada observación o recomendación.
 - No asumas versión de FreeCAD ni de OCCT: los scripts imprimen `App.Version()`.
 - Ejecutar un script sin interfaz: `freecadcmd <script.py>`
   (si en este equipo el binario se llama distinto, o es un AppImage, el usuario lo anota aquí: `/snap/bin/freecad.cmd`).
-- Validar: `FCSTD=<pieza.FCStd> freecadcmd _herramientas/validar_fcstd.py`; leer la última línea
+- Validar pieza o ensamblaje: `FCSTD=<pieza.FCStd> freecadcmd _herramientas/validar_fcstd.py`; leer la última línea
   (`VALIDACION: OK` o `VALIDACION: FALLIDA`).
+- Validar interfaces y colisiones de ensamblaje: `FCSTD=<ensamblaje.FCStd> freecadcmd _herramientas/verificar_interfaces.py`;
+  leer la última línea (`VERIFICACION_INTERFACES: OK` o `VERIFICACION_INTERFACES: FALLIDA`).
 - Todo uso de `FreeCADGui` va dentro de `if App.GuiUp:`. Todo script termina guardando el `.FCStd`.
 - Usa `_herramientas/fc_helpers.py` (clase `Pieza`) en todos los scripts. Como referencia de
   estructura, mira `proyectos/bomba_flujo_cardiaco/piezas/generar_tapa_exterior_16a.py`.
@@ -19,7 +21,8 @@ porqué de cada observación o recomendación.
 - `proyectos/<proyecto>/entradas/`: lo que aporta el usuario (planos, croquis, fotos, esquemas, notas).
 - `proyectos/<proyecto>/FICHA_<pieza>.md`: ficha de diseño de cada pieza (plantilla en `_plantillas/`).
 - `proyectos/<proyecto>/piezas/`: `generar_<pieza>.py` y su `.FCStd`.
-- `proyectos/<proyecto>/ensamblajes/`: ensamblajes y despieces.
+- `proyectos/<proyecto>/ensamblajes/`: ensamblajes y despieces (`Ensamblaje` por `App::Link` y piloto nativo `Assembly::AssemblyObject`).
+- `_herramientas/freecad_mod/`: addons (`MaterialSync`) y macros (`Movimiento_Libre_Toggle.FCMacro`, `Aislar_Toggle.FCMacro`) versionados en Git; se enlazan a `~/snap/freecad/common/` con `_herramientas/freecad_mod/instalar_enlaces.sh`.
 - `02_Catalogos_SKF_DIN_ISO/`: referencia comercial (roscas, mechas, chavetas, rodamientos).
 
 ## 2. FLUJO DE TRABAJO (para cada pieza, en este orden)
@@ -82,7 +85,10 @@ y las 2 o 3 propuestas de mejora más valiosas.
 6. **Conectores LCS:** toda pieza va en un `App::Part`, con un `PartDesign::CoordinateSystem`
    `LCS_*` por cada interfaz funcional (origen, asientos, ejes, puertos, alojamientos),
    posicionado por expresiones ligadas a `Parametros`.
-7. **Ensamblajes (`App::Link`):** todo ensamblaje debe usar la clase `Ensamblaje` de `_herramientas/fc_helpers.py`, creando vínculos reales `App::Link` hacia los `.FCStd` individuales de `piezas/` (nunca recreando ni duplicando geometría sólida dentro del archivo de ensamblaje). Las piezas se posicionan alineando sus conectores `lcs_pieza` y `lcs_destino`, definiendo vectores `explosion_vec` gobernados por `<<Parametros_Generales>>.explosion` (celda `B2`) y generando automáticamente las hojas `Lista_de_Materiales` (BOM), `Materiales_Generales` (con soporte de `TRANSP_INSP` y preservación de apariencias personalizadas) y `Reporte_Fisico` (masas vinculadas).
+7. **Ensamblajes (`App::Link` y `Assembly::AssemblyObject`):** todo ensamblaje general usa la clase `Ensamblaje` de `_herramientas/fc_helpers.py` (o el banco nativo `Assembly::AssemblyObject` para subconjuntos cinemáticos con solver interactivo), creando vínculos reales `App::Link` hacia los `.FCStd` individuales de `piezas/` (nunca recreando ni duplicando geometría sólida dentro del archivo de ensamblaje). Las piezas se posicionan encadenando exclusivamente sus conectores `lcs_pieza` y `lcs_destino` (prohibido hardcodear números mágicos en `offset`), definiendo vectores `explosion_vec` gobernados por `<<Parametros_Generales>>.explosion` (celda `B2`) y generando automáticamente las hojas `Lista_de_Materiales` (BOM), `Materiales_Generales` (con soporte de `TRANSP_INSP` y preservación de apariencias personalizadas) y `Reporte_Fisico` (masas vinculadas).
+8. **Guardia anti-pisado (`Manifiesto_Script`):** antes de regenerar un `.FCStd` existente, `Pieza` y `Ensamblaje` verifican si el usuario hizo ediciones manuales en la GUI:
+   - Si el usuario modificó valores en la hoja `Parametros` del `.FCStd`, esos valores se sincronizan automáticamente de vuelta hacia la lista `DIMS` del script `generar_<pieza>.py` (marcando el origen como `"usuario"`) antes de reconstruir.
+   - Si el usuario agregó operaciones/objetos manuales en el árbol del `.FCStd` o editó `Placement`/expresiones fuera de la hoja, el script aborta con `[GUARDIA ANTI-PISADO]` sin sobrescribir el `.FCStd`. Solo se permite forzar la sobrescritura con `FORZAR=1` tras incorporarlo al script o con confirmación del usuario.
 
    
 ## 4. MODO HÍBRIDO EN VIVO (MCP BRIDGE)

@@ -50,6 +50,7 @@ DIMS = [
     ("p_m3_med",       "Prof. M3 corona media",                       "4.00 mm",   "L", None,       "plano"),
     ("d_cor_tras",     "Corona trasera 4x M3 (adaptador eje)",        "50.02 mm",  "L", None,       "plano"),
     ("p_m3_tras",      "Prof. M3 corona trasera",                     "7.00 mm",   "L", None,       "plano"),
+    ("z_acople_hus",   "Posición axial extremo izq. del husillo",     "5.50 mm",   "L", None,       "calculado"),
 ]
 
 pz = Pieza("Tapa_Interior_16b")
@@ -135,7 +136,10 @@ solido = pz.corte("Tapa_Interior_Solido", cuerpo, vaciado)
 
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
+pz.lcs("LCS_Asiento_Sufridera_Int", z=p("p_reb1"))
+pz.lcs("LCS_Acople_Husillo", z=p("z_acople_hus"))
 pz.lcs("LCS_Asiento_Carcasa_145mm", z=p("h_base"))
+pz.lcs("LCS_Tope_Resalte", z=z_tope)
 pz.lcs("LCS_Piso_Tubo_110_5", z=z_piso2)
 pz.lcs("LCS_Guia_1", x=f"-1 * {p('d_c75')} / 2", z=z_piso2)
 pz.lcs("LCS_Guia_2", x=f"{p('d_c75')} / 2", z=z_piso2)

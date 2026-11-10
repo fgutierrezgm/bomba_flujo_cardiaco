@@ -13,6 +13,13 @@ MATERIALES_BASE = {
         "color": (0.75, 0.76, 0.78),
         "transparencia": 0,
     },
+    "Acero_Inox_430": {
+        "nombre": "Acero Inoxidable Ferrítico AISI 430 (Ferromagnético)",
+        "densidad_num": "0.00000770",
+        "densidad_desc": "7.70 g / cm^3 (kg / mm^3)",
+        "color": (0.70, 0.72, 0.75),
+        "transparencia": 0,
+    },
     "Delrin": {
         "nombre": "Delrin POM-C",
         "densidad_num": "0.00000141",
@@ -62,23 +69,336 @@ FORMULA = {
 }
 
 
+def _q_val(val_str):
+    """Extrae el valor numérico flotante de una cantidad FreeCAD (p. ej. '15.00 mm' -> 15.0)."""
+    if val_str is None:
+        return None
+    s = str(val_str).strip().lstrip("=")
+    if not s:
+        return None
+    try:
+        return float(App.Units.Quantity(s).Value)
+    except Exception:
+        try:
+            return float(s)
+        except Exception:
+            return s
+
+
+def _q_diff(a, b, tol=1e-4):
+    """Devuelve True si dos cantidades difieren numéricamente más que tol."""
+    va, vb = _q_val(a), _q_val(b)
+    if isinstance(va, float) and isinstance(vb, float):
+        return abs(va - vb) > tol
+    return str(a).strip() != str(b).strip()
+
+
+def _formatear_cantidad(val_prev, plantilla_nominal):
+    """Formatea un valor leído de Spreadsheet conservando la unidad del nominal original."""
+    s_prev = str(val_prev).strip().lstrip("=")
+    v_num = _q_val(s_prev)
+    if not isinstance(v_num, float):
+        return s_prev
+    s_nom = str(plantilla_nominal).strip()
+    if "deg" in s_nom:
+        return f"{v_num:g} deg"
+    if "mm" in s_nom:
+        return f"{v_num:.2f} mm"
+    return f"{v_num:g}"
+
+
 class Pieza:
-    def __init__(self, nombre):
+    def __init__(self, nombre, ruta_salida=None, ruta_script=None):
+        import os
+        import sys
         print("FreeCAD", ".".join(App.Version()[:3]))
         self.nombre = nombre
+
+        # Descubrir automáticamente SALIDA y __file__ del script llamador si no se pasan
+        caller_globals = {}
+        try:
+            caller_globals = sys._getframe(1).f_globals
+        except Exception:
+            pass
+        self.ruta_salida = ruta_salida or caller_globals.get("SALIDA")
+        self.ruta_script = ruta_script or caller_globals.get("__file__")
+        if self.ruta_salida:
+            self.ruta_salida = os.path.abspath(self.ruta_salida)
+        if self.ruta_script and os.path.exists(str(self.ruta_script)):
+            self.ruta_script = os.path.abspath(self.ruta_script)
+        else:
+            self.ruta_script = None
+
         # Limpiar snapshots en memoria de macros (Movimiento Libre / Aislar) para no inyectar expresiones viejas
         for prefijo_macro in ("_mov_libre_", "_aislado_"):
             attr_m = f"{prefijo_macro}{nombre}"
             if hasattr(App, attr_m):
                 delattr(App, attr_m)
 
+        # Guardia anti-pisado: inspeccionar documento previo (en memoria o en disco) ANTES de cerrarlo
+        self._estado_prev = self._capturar_estado_previo()
+        self._verificar_operaciones_manuales_arbol()
+
         if nombre in App.listDocuments():
-            App.closeDocument(nombre)
-        self.doc = App.newDocument(nombre)
-        self.part = self.doc.addObject("App::Part", nombre)
+            self.doc = App.getDocument(nombre)
+            self.part = self.doc.getObject(nombre)
+            if self.part is None:
+                self.part = self.doc.addObject("App::Part", nombre)
+            # Limpiar objetos internos previos sin destruir self.doc ni self.part (evita punteros colgantes en App::Link)
+            for o in list(self.doc.Objects):
+                if o == self.part or o.TypeId in ("App::Origin", "App::Plane", "App::Line"):
+                    continue
+                try:
+                    self.doc.removeObject(o.Name)
+                except Exception:
+                    pass
+        else:
+            self.doc = App.newDocument(nombre)
+            self.part = self.doc.addObject("App::Part", nombre)
         self.hoja = None
         self.hoja_mat = None
+        self.filas_actuales = []
+        self.cabecera_actual = {}
         self.auxiliares = []      # herramientas y fusiones intermedias (se ocultan en la GUI)
+
+    def _capturar_estado_previo(self):
+        """Lee parámetros y objetos del documento existente (en GUI o en disco) antes de regenerar."""
+        import json
+        import os
+        estado = {"manifiesto": None, "parametros": {}, "cabecera": {}, "objetos": {}}
+        doc_prev = None
+        cerrar_temp = False
+
+        if self.nombre in App.listDocuments():
+            doc_prev = App.getDocument(self.nombre)
+        elif self.ruta_salida and os.path.exists(self.ruta_salida):
+            try:
+                doc_prev = App.openDocument(self.ruta_salida, True)
+                cerrar_temp = True
+            except Exception:
+                doc_prev = None
+
+        if doc_prev is None:
+            return estado
+
+        try:
+            part_prev = doc_prev.getObject(self.nombre)
+            if part_prev and hasattr(part_prev, "Manifiesto_Script"):
+                raw_m = getattr(part_prev, "Manifiesto_Script", "")
+                if raw_m:
+                    estado["manifiesto"] = json.loads(raw_m)
+
+            ss = doc_prev.getObject("Parametros")
+            if ss:
+                for clave, celda in (("modo_diseno", "B2"), ("escala", "B3"), ("holgura_fdm", "B4")):
+                    try:
+                        estado["cabecera"][clave] = str(ss.get(celda))
+                    except Exception:
+                        pass
+                r = 7
+                while True:
+                    try:
+                        alias = ss.get(f"A{r}")
+                    except Exception:
+                        break
+                    if not alias:
+                        break
+                    alias_s = str(alias).strip()
+                    try:
+                        nom_val = str(ss.get(f"D{r}"))
+                    except Exception:
+                        nom_val = ""
+                    try:
+                        mecha_val = str(ss.get(f"E{r}"))
+                    except Exception:
+                        mecha_val = None
+                    try:
+                        orig_val = str(ss.get(f"F{r}")).strip()
+                    except Exception:
+                        orig_val = "plano"
+                    estado["parametros"][alias_s] = {
+                        "nominal": nom_val,
+                        "mecha": mecha_val,
+                        "origen": orig_val,
+                        "fila": r,
+                    }
+                    r += 1
+
+            for o in doc_prev.Objects:
+                if o.TypeId in ("App::Origin", "App::Plane", "App::Line"):
+                    continue
+                plc = None
+                if hasattr(o, "Placement"):
+                    b = o.Placement.Base
+                    rot = o.Placement.Rotation.Q
+                    plc = [round(b.x, 4), round(b.y, 4), round(b.z, 4),
+                           round(rot[0], 4), round(rot[1], 4), round(rot[2], 4), round(rot[3], 4)]
+                exprs = {}
+                if hasattr(o, "ExpressionEngine"):
+                    exprs = {k: v for k, v in o.ExpressionEngine}
+                estado["objetos"][o.Name] = {
+                    "TypeId": o.TypeId,
+                    "Label": o.Label,
+                    "Placement": plc,
+                    "Expresiones": exprs,
+                }
+        except Exception:
+            pass
+        finally:
+            if cerrar_temp and doc_prev:
+                try:
+                    App.closeDocument(doc_prev.Name)
+                except Exception:
+                    pass
+        return estado
+
+    def _verificar_operaciones_manuales_arbol(self):
+        """Si hay objetos nuevos o expresiones/posiciones editadas a mano en el árbol, detiene la regeneración."""
+        import os
+        if os.environ.get("FORZAR") == "1":
+            return
+        manif = self._estado_prev.get("manifiesto")
+        if not manif:
+            return
+        objs_manif = manif.get("objetos", {})
+        objs_prev = self._estado_prev.get("objetos", {})
+
+        # ¿Cambió algún parámetro en la hoja Parametros respecto del manifiesto?
+        params_manif = manif.get("parametros", {})
+        params_prev = self._estado_prev.get("parametros", {})
+        hubo_cambio_param = any(
+            alias in params_manif and _q_diff(info["nominal"], params_manif[alias].get("nominal"))
+            for alias, info in params_prev.items()
+        )
+
+        nuevos = [
+            f"{nombre_obj} ({info['TypeId']}, Label='{info['Label']}')"
+            for nombre_obj, info in objs_prev.items()
+            if nombre_obj not in objs_manif
+        ]
+        modificados = []
+        for nombre_obj, info in objs_prev.items():
+            if nombre_obj not in objs_manif:
+                continue
+            m_info = objs_manif[nombre_obj]
+            if info["Expresiones"] != m_info.get("Expresiones", {}):
+                modificados.append(
+                    f"{nombre_obj}: expresiones cambiaron de {m_info.get('Expresiones')} a {info['Expresiones']}"
+                )
+            elif not hubo_cambio_param and info["Placement"] != m_info.get("Placement"):
+                modificados.append(
+                    f"{nombre_obj}: Placement cambió manualmente de {m_info.get('Placement')} a {info['Placement']}"
+                )
+
+        if nuevos or modificados:
+            lineas = [
+                f"[GUARDIA ANTI-PISADO] Se abortó la regeneración de '{self.nombre}' para no perder cambios manuales en el árbol:"
+            ]
+            if nuevos:
+                lineas.append("  - Objetos agregados manualmente: " + ", ".join(nuevos))
+            if modificados:
+                for m in modificados:
+                    lineas.append("  - " + m)
+            lineas.append("  -> Pasa estos cambios al script .py antes de regenerar, o ejecuta con FORZAR=1.")
+            raise RuntimeError("\n".join(lineas))
+
+    def _sincronizar_parametros_con_script(self, filas):
+        """Si el usuario editó valores en la hoja Parametros del .FCStd, actualiza filas y el archivo .py."""
+        import os
+        import re
+        if os.environ.get("FORZAR") == "1":
+            return list(filas)
+        params_prev = self._estado_prev.get("parametros", {})
+        if not params_prev:
+            return list(filas)
+        manif = self._estado_prev.get("manifiesto")
+        params_manif = manif.get("parametros", {}) if manif else {}
+
+        filas_nuevas = []
+        cambios_script = []
+        for item in filas:
+            alias, desc, nominal, tipo, mecha, origen = item
+            if alias in params_prev:
+                p_prev = params_prev[alias]
+                editado_en_fcstd = False
+                if alias in params_manif:
+                    if _q_diff(p_prev["nominal"], params_manif[alias].get("nominal")):
+                        editado_en_fcstd = True
+                    elif mecha and p_prev.get("mecha") and _q_diff(p_prev["mecha"], params_manif[alias].get("mecha")):
+                        editado_en_fcstd = True
+                elif p_prev.get("origen") == "usuario" and _q_diff(p_prev["nominal"], nominal):
+                    editado_en_fcstd = True
+
+                if editado_en_fcstd and _q_diff(p_prev["nominal"], nominal):
+                    nuevo_nom = _formatear_cantidad(p_prev["nominal"], nominal)
+                    nueva_mecha = (
+                        _formatear_cantidad(p_prev["mecha"], mecha)
+                        if (mecha and p_prev.get("mecha"))
+                        else mecha
+                    )
+                    cambios_script.append((alias, nominal, nuevo_nom, origen))
+                    filas_nuevas.append((alias, desc, nuevo_nom, tipo, nueva_mecha, "usuario"))
+                    continue
+            filas_nuevas.append(item)
+
+        if cambios_script and self.ruta_script and os.path.exists(self.ruta_script):
+            try:
+                with open(self.ruta_script, "r", encoding="utf-8") as f:
+                    texto = f.read()
+                for alias, nom_viejo, nom_nuevo, orig_viejo in cambios_script:
+                    patron = rf'(\(\s*"{re.escape(alias)}"\s*,\s*"[^"]*"\s*,\s*"){re.escape(nom_viejo)}(".*?)"{re.escape(orig_viejo)}"(\s*\)\s*,?)'
+                    reemplazo = (
+                        rf'\g<1>{nom_nuevo}\g<2>"usuario"\g<3>  # sync desde .FCStd (antes: {nom_viejo})'
+                    )
+                    texto_nuevo, n_sub = re.subn(patron, reemplazo, texto, count=1)
+                    if n_sub > 0:
+                        texto = texto_nuevo
+                    print(
+                        f"[GUARDIA ANTI-PISADO] Sincronizado '{alias}' desde .FCStd -> {os.path.basename(self.ruta_script)}: "
+                        f"{nom_viejo} -> {nom_nuevo} (origen: usuario)"
+                    )
+                with open(self.ruta_script, "w", encoding="utf-8") as f:
+                    f.write(texto)
+            except Exception as e:
+                print(f"[GUARDIA ANTI-PISADO] Aviso al escribir {self.ruta_script}: {e}")
+
+        return filas_nuevas
+
+    def _guardar_manifiesto(self):
+        """Guarda en el App::Part el manifiesto JSON de parámetros y objetos generados por el script."""
+        import json
+        manifiesto = {
+            "cabecera": self.cabecera_actual,
+            "parametros": {
+                alias: {"nominal": nominal, "mecha": mecha, "origen": origen}
+                for (alias, _desc, nominal, _tipo, mecha, origen) in self.filas_actuales
+            },
+            "objetos": {},
+        }
+        for o in self.doc.Objects:
+            if o.TypeId in ("App::Origin", "App::Plane", "App::Line"):
+                continue
+            plc = None
+            if hasattr(o, "Placement"):
+                b = o.Placement.Base
+                rot = o.Placement.Rotation.Q
+                plc = [round(b.x, 4), round(b.y, 4), round(b.z, 4),
+                       round(rot[0], 4), round(rot[1], 4), round(rot[2], 4), round(rot[3], 4)]
+            exprs = {}
+            if hasattr(o, "ExpressionEngine"):
+                exprs = {k: v for k, v in o.ExpressionEngine}
+            manifiesto["objetos"][o.Name] = {
+                "TypeId": o.TypeId,
+                "Label": o.Label,
+                "Placement": plc,
+                "Expresiones": exprs,
+            }
+        if not hasattr(self.part, "Manifiesto_Script"):
+            self.part.addProperty(
+                "App::PropertyString", "Manifiesto_Script", "_Control_IA",
+                "Manifiesto JSON para la guardia anti-pisado", 4
+            )
+        self.part.Manifiesto_Script = json.dumps(manifiesto, ensure_ascii=False)
 
     # -- utilidades de expresiones -------------------------------------------
     def p(self, alias):
@@ -92,6 +412,13 @@ class Pieza:
     # -- hoja de parámetros ---------------------------------------------------
     def parametros(self, filas, modo=2, escala="1.0", holgura_fdm="0.20 mm"):
         """filas: (alias, descripción, nominal, tipo, mecha|None, origen)."""
+        filas_sync = self._sincronizar_parametros_con_script(filas)
+        self.filas_actuales = list(filas_sync)
+        self.cabecera_actual = {
+            "modo_diseno": str(modo),
+            "escala": str(escala),
+            "holgura_fdm": str(holgura_fdm),
+        }
         ss = self.hoja = self.nuevo("Spreadsheet::Sheet", "Parametros")
         for celda, txt in (("A1", "PARÁMETRO"), ("B1", "VALOR EFECTIVO"), ("C1", "DESCRIPCIÓN"),
                            ("D1", "NOMINAL"), ("E1", "MECHA (solo Modo 2)"), ("F1", "ORIGEN")):
@@ -107,7 +434,7 @@ class Pieza:
         ss.setAlias("B5", "esc")
         ss.set("A6", "Holgura efectiva"); ss.set("B6", "=modo_diseno == 1 ? holgura_fdm : 0 mm")
         ss.setAlias("B6", "holgura"); ss.set("C6", "0 fuera del Modo 1")
-        for r, (alias, desc, nominal, tipo, mecha, origen) in enumerate(filas, start=7):
+        for r, (alias, desc, nominal, tipo, mecha, origen) in enumerate(filas_sync, start=7):
             if origen not in ORIGENES:
                 raise ValueError(f"{alias}: origen '{origen}' inválido, usar {ORIGENES}")
             ss.set(f"A{r}", alias)
@@ -330,6 +657,7 @@ class Pieza:
         self.part.Visibility = True
 
         self.doc.recompute()
+        self._guardar_manifiesto()
         os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
         self.doc.saveAs(ruta)
         print("Guardado:", ruta)
@@ -408,15 +736,28 @@ class Ensamblaje:
                 delattr(App, attr_m)
 
         if nombre in App.listDocuments():
-            App.closeDocument(nombre)
-
-        self.doc = App.newDocument(nombre)
-        # Guardar antes de crear vínculos para que FreeCAD almacene rutas relativas en App::Link
-        self.doc.saveAs(self.ruta)
-        self.asm = self.doc.addObject("App::Part", nombre)
+            self.doc = App.getDocument(nombre)
+            self.asm = self.doc.getObject(nombre)
+            if self.asm is None:
+                self.asm = self.doc.addObject("App::Part", nombre)
+            for o in list(self.doc.Objects):
+                if o == self.asm or o.TypeId in ("App::Origin", "App::Plane", "App::Line"):
+                    continue
+                try:
+                    self.doc.removeObject(o.Name)
+                except Exception:
+                    pass
+        else:
+            self.doc = App.newDocument(nombre)
+            # Guardar antes de crear vínculos para que FreeCAD almacene rutas relativas en App::Link
+            self.doc.saveAs(self.ruta)
+            self.asm = self.doc.addObject("App::Part", nombre)
         self.pos_armadas = {}      # nombre_instancia -> Placement sin explotar
         self.conteo_bom = {}       # archivo -> [etiqueta, cantidad]
         self.componentes_inst = [] # metadatos de instancias para Materiales_Generales y Reporte_Fisico
+        self.interfaces = []       # interfaces coaxiales declaradas para verificar_interfaces.py
+        self.pares_rosca_ajuste = [] # pares (inst1, inst2) con interferencia intencional (rosca/ajuste)
+        self.interferencias_plano = [] # interferencias del plano original documentadas en FICHA (AVISO)
         self.hoja = self._crear_hoja_maestra(explosion_inicial)
 
     def _crear_hoja_maestra(self, explosion_inicial):
@@ -588,7 +929,42 @@ class Ensamblaje:
         })
         return link
 
+    def interfaz_coaxial(self, ref1, ref2, descripcion="", tol_mm=0.05):
+        """
+        Registra un par de patrones o cilindros que deben ser coaxiales en el ensamblaje armado.
+        Formato de ref: 'NombreInstancia:PatronCilindro' (admite comodín '*', p. ej. 'Tapa_Interior_16b:M3_Guia_1_*').
+        """
+        self.interfaces.append({
+            "ref1": ref1,
+            "ref2": ref2,
+            "descripcion": descripcion,
+            "tol_mm": float(tol_mm),
+        })
+
+    def par_roscado(self, inst1, inst2):
+        """Declara que entre inst1 e inst2 existe contacto roscado o ajuste (exento de reporte de colisión)."""
+        n1 = inst1.Name if hasattr(inst1, "Name") else str(inst1)
+        n2 = inst2.Name if hasattr(inst2, "Name") else str(inst2)
+        self.pares_rosca_ajuste.append([n1, n2])
+
+    def interferencia_plano_conocida(self, inst1, inst2, motivo=""):
+        """Declara una interferencia propia de las cotas del plano original (se reporta como AVISO, no ERROR)."""
+        n1 = inst1.Name if hasattr(inst1, "Name") else str(inst1)
+        n2 = inst2.Name if hasattr(inst2, "Name") else str(inst2)
+        self.interferencias_plano.append({"par": [n1, n2], "motivo": motivo})
+
     def cerrar(self):
+        import json
+        if not hasattr(self.asm, "Interfaces_Declaradas"):
+            self.asm.addProperty(
+                "App::PropertyString", "Interfaces_Declaradas", "_Control_IA",
+                "Interfaces coaxiales y pares roscados declarados", 4
+            )
+        self.asm.Interfaces_Declaradas = json.dumps({
+            "coaxiales": self.interfaces,
+            "pares_rosca_ajuste": self.pares_rosca_ajuste,
+            "interferencias_plano": self.interferencias_plano,
+        }, ensure_ascii=False)
         # 1. Hoja Lista_de_Materiales (BOM)
         bom = self.asm.newObject("Spreadsheet::Sheet", "Lista_de_Materiales")
         bom.set("A1", "ARCHIVO"); bom.set("B1", "PIEZA"); bom.set("C1", "CANTIDAD")

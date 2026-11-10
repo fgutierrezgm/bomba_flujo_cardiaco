@@ -84,6 +84,7 @@ pz.lcs("LCS_Origen")
 pz.lcs("LCS_Asiento_Rodamiento", z=p("z_1"))
 pz.lcs("LCS_Asiento_Reten", z=p("z_3"))
 pz.lcs("LCS_Espiga_Husillo", z=p("z_4"))
+pz.lcs("LCS_Pasador_3", z=p("z_pas3"))
 pz.lcs("LCS_Extremo_Der", z=p("l_total"))
 
 pz.reporte_fisico(solido)

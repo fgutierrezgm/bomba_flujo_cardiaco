@@ -52,6 +52,7 @@ solido = pz.corte("Tornillo_Sin_Fin_Solido", cuerpo, vaciado)
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
 pz.lcs("LCS_Pasador", z=p("z_pasador"))
+pz.lcs("LCS_Fondo_Aloj_Izq", z=p("p_aloj_izq"))
 pz.lcs("LCS_Fin_Rosca", z=p("l_rosca"))
 pz.lcs("LCS_Extremo_Der", z=f"{p('l_rosca')} + {p('l_esp_der')}")
 

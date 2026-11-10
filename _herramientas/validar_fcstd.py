@@ -45,27 +45,36 @@ def validar(ruta):
                 errores.append(f"Hoja {h.Label}, celda {c}: {e}")
 
     links = [o for o in doc.Objects if o.TypeId == "App::Link"]
+    asm_nativo = next((o for o in doc.Objects if o.isDerivedFrom("Assembly::AssemblyObject")), None)
     pg = next((h for h in hojas if h.Label == "Parametros_Generales"), None)
 
-    # --- MODO ENSAMBLAJE DE VÍNCULOS (App::Link) ---
+    # --- MODO ENSAMBLAJE DE VÍNCULOS (App::Link o Assembly::AssemblyObject) ---
     if links:
-        if pg is None:
-            errores.append("Falta la hoja 'Parametros_Generales' en el ensamblaje")
+        if asm_nativo is not None:
+            try:
+                res_s = asm_nativo.solve()
+                if res_s != 0:
+                    errores.append(f"El solver de Assembly::AssemblyObject devolvió código {res_s} (!= 0)")
+            except Exception as e:
+                errores.append(f"Error al ejecutar solve() en Assembly::AssemblyObject: {e}")
         else:
-            if pg.getCellFromAlias("explosion") != "B2":
-                errores.append("El alias 'explosion' debe estar en la celda B2 de 'Parametros_Generales'")
-            for c in celdas_de(pg):
-                if c.startswith("F"):
-                    try:
-                        if str(pg.get(c)).strip().lower() == "supuesto":
-                            fila = c[1:]
-                            avisos.append(f"Parámetro SUPUESTO sin confirmar: {pg.get('A' + fila)} (fila {fila})")
-                    except Exception:
-                        pass
+            if pg is None:
+                errores.append("Falta la hoja 'Parametros_Generales' en el ensamblaje")
+            else:
+                if pg.getCellFromAlias("explosion") != "B2":
+                    errores.append("El alias 'explosion' debe estar en la celda B2 de 'Parametros_Generales'")
+                for c in celdas_de(pg):
+                    if c.startswith("F"):
+                        try:
+                            if str(pg.get(c)).strip().lower() == "supuesto":
+                                fila = c[1:]
+                                avisos.append(f"Parámetro SUPUESTO sin confirmar: {pg.get('A' + fila)} (fila {fila})")
+                        except Exception:
+                            pass
 
-        bom = next((h for h in hojas if h.Label == "Lista_de_Materiales"), None)
-        if bom is None:
-            errores.append("Falta la hoja 'Lista_de_Materiales' en el ensamblaje")
+            bom = next((h for h in hojas if h.Label == "Lista_de_Materiales"), None)
+            if bom is None:
+                errores.append("Falta la hoja 'Lista_de_Materiales' en el ensamblaje")
 
         links_validos = 0
         for lnk in links:
@@ -73,7 +82,8 @@ def validar(ruta):
                 errores.append(f"App::Link '{lnk.Name}' ({lnk.Label}) tiene LinkedObject = None")
             else:
                 links_validos += 1
-        print(f"INFO Ensamblaje App::Link: {links_validos}/{len(links)} instancias vinculadas válidas")
+        tipo_ens = "Assembly::AssemblyObject" if asm_nativo is not None else "App::Link"
+        print(f"INFO Ensamblaje {tipo_ens}: {links_validos}/{len(links)} instancias vinculadas válidas")
         return errores, avisos
 
     # --- MODO PIEZA INDIVIDUAL (Pieza) ---
