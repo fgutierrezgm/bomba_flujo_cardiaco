@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
-Piloto de ensamblaje nativo con el banco Assembly de FreeCAD 1.x (Solver Ondsel).
-Subconjunto funcional: Tren del Émbolo, Guías, Camisa, Tapas y Sensores Inductivos.
+Piloto de ensamblaje cinemático completo con el banco Assembly de FreeCAD 1.x (Solver Ondsel MbD).
+Mecanismo completo de la Bomba de Flujo Cardíaco: 32 instancias vinculadas (App::Link).
 
 Características clave:
-- Usa `Assembly::AssemblyObject` nativo y juntas reales (`Fixed`, `Slider`, `GroundedJoint`)
+- Usa `Assembly::AssemblyObject` nativo y juntas cinemáticas reales (`Fixed`, `Slider`, `GroundedJoint`)
   apuntando a los conectores `LCS_*` (`PartDesign::CoordinateSystem`) de cada pieza.
-- El émbolo (`Embolo_Delrin_10`) tiene una junta `Slider` (`Joint_Corredera_Embolo`) con
-  límites de carrera (`LengthMin = 15 mm`, `LengthMax = 215 mm`), por lo que se puede
-  arrastrar con el mouse a lo largo de las guías directamente en la vista 3D de FreeCAD.
+- El tren móvil del émbolo (`Embolo_Delrin_10`, `Centro_Embolo_1_11`, `Centro_Embolo_2_12` y
+  los 2x `Sensor_Piston_05b`) se desplaza solidariamente sobre las guías con una junta `Slider`
+  con límites de carrera configurados (-100 mm a 100 mm respecto a la posición central Z=115 mm).
 - Modo incremental: si `Piloto_Embolo_Assembly.FCStd` ya existe y no se pasa `FORZAR=1`,
   preserva cualquier pieza o junta agregada/editada manualmente en la GUI.
+- Hoja `Materiales_Generales` sincronizada automáticamente con colores y transparencias de inspección.
+- Celda `modo_diseno_global` en `Parametros_Generales` que conmuta todas las piezas hijas entre
+  1 (Impresión 3D), 2 (CNC/Planos) y 3 (Render/Nominal).
 
 Ejecutar:
   /snap/bin/freecad.cmd proyectos/bomba_flujo_cardiaco/ensamblajes/generar_piloto_embolo_assembly.py
 """
+import json
 import os
 import sys
 import FreeCAD as App
@@ -39,11 +43,11 @@ def _obtener_part_hijo(ruta_fcstd):
     if not os.path.exists(ruta_abs):
         raise FileNotFoundError(f"No existe la pieza: {ruta_abs}")
     doc_hijo = next(
-        (d for d in App.listDocuments().values() if os.path.abspath(d.FileName) == ruta_abs),
+        (d for d in App.listDocuments().values() if os.path.abspath(getattr(d, "FileName", "")) == ruta_abs),
         None,
     )
     if doc_hijo is None:
-        doc_hijo = App.openDocument(ruta_abs)
+        doc_hijo = App.openDocument(ruta_abs, True)
     part_hijo = next((o for o in doc_hijo.Objects if o.TypeId == "App::Part"), None)
     if part_hijo is None:
         raise RuntimeError(f"{ruta_abs} no contiene un contenedor App::Part")
@@ -147,7 +151,6 @@ def asegurar_junta(
         vp.attach(j.ViewObject)
 
     # Configurar conectores apuntando a los LCS (PartDesign::CoordinateSystem)
-    # FreeCAD Assembly espera 2 entradas en la lista de subnombres (elemento y vértice)
     j.Reference1 = [link1, [f"{lcs1}.", f"{lcs1}."]]
     j.Reference2 = [link2, [f"{lcs2}.", f"{lcs2}."]]
     j.Offset1 = off1
@@ -168,9 +171,11 @@ def aplicar_apariencia_piloto(doc, asm):
     mg = doc.getObject("Materiales_Generales")
     if mg is None:
         mg = asm.newObject("Spreadsheet::Sheet", "Materiales_Generales")
-        for celda, txt in (("A1", "COMPONENTE"), ("B1", "MATERIAL"), ("C1", "DENSIDAD"),
-                           ("D1", "COLOR_R"), ("E1", "COLOR_G"), ("F1", "COLOR_B"),
-                           ("G1", "TRANSP_BASE"), ("H1", "TRANSP_INSP"), ("I1", "PERSONALIZADO")):
+        for celda, txt in (
+            ("A1", "COMPONENTE"), ("B1", "MATERIAL"), ("C1", "DENSIDAD"),
+            ("D1", "COLOR_R"), ("E1", "COLOR_G"), ("F1", "COLOR_B"),
+            ("G1", "TRANSP_BASE"), ("H1", "TRANSP_INSP"), ("I1", "PERSONALIZADO")
+        ):
             mg.set(celda, txt)
 
     links = [o for o in asm.Group if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None)]
@@ -289,7 +294,7 @@ def main():
     # Modo incremental: si existe y no se fuerza, abrir y actualizar sin perder juntas manuales
     if os.path.exists(RUTA_SALIDA) and not forzar:
         doc = next(
-            (d for d in App.listDocuments().values() if os.path.abspath(d.FileName) == RUTA_SALIDA),
+            (d for d in App.listDocuments().values() if os.path.abspath(getattr(d, "FileName", "")) == RUTA_SALIDA),
             None,
         )
         if doc is None:
@@ -309,62 +314,33 @@ def main():
     pg = asegurar_hoja_parametros_generales(doc, asm)
     jg = UtilsAssembly.getJointGroup(asm)
 
-    # 1. Insertar/recuperar componentes (App::Link)
+    # =========================================================================
+    # 1. BASE: Tapa Interior (Grounded al origen del ensamblaje)
+    # =========================================================================
     lnk_tapa_int, _ = asegurar_link(doc, asm, p("Tapa_Interior_16b.FCStd"), "Tapa_Interior_16b")
-    lnk_guia_1, _ = asegurar_link(doc, asm, p("Guia_08.FCStd"), "Guia_1_08")
-    lnk_guia_2, _ = asegurar_link(doc, asm, p("Guia_08.FCStd"), "Guia_2_08")
-    lnk_embolo, _ = asegurar_link(doc, asm, p("Embolo_Delrin_10.FCStd"), "Embolo_Delrin_10")
-    lnk_target_1, _ = asegurar_link(doc, asm, p("Sensor_Piston_05b.FCStd"), "Sensor_Piston_1_05b")
-    lnk_target_2, _ = asegurar_link(doc, asm, p("Sensor_Piston_05b.FCStd"), "Sensor_Piston_2_05b")
-    lnk_cilindro, _ = asegurar_link(doc, asm, p("Cilindro_09.FCStd"), "Cilindro_09")
-    lnk_tapa_ext, _ = asegurar_link(doc, asm, p("Tapa_Exterior_16a.FCStd"), "Tapa_Exterior_16a")
-    lnk_sens_int, _ = asegurar_link(
-        doc, asm, p("Sensor_Inductivo_LJ12A3.FCStd"), "Sensor_Inductivo_Int"
-    )
-    lnk_sens_ext, _ = asegurar_link(
-        doc, asm, p("Sensor_Inductivo_LJ12A3.FCStd"), "Sensor_Inductivo_Ext"
-    )
-
-    # 2. Pieza base fija al piso (GroundedJoint)
     asegurar_grounded(jg, lnk_tapa_int, "Grounded_Tapa_Interior")
 
-    # 3. Guías del pistón (Fixed)
-    asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Guia_1",
-        "Fixed",
-        lnk_tapa_int,
-        "LCS_Guia_1",
-        lnk_guia_1,
-        "LCS_Hombro_Asiento",
-    )
-    asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Guia_2",
-        "Fixed",
-        lnk_tapa_int,
-        "LCS_Guia_2",
-        lnk_guia_2,
-        "LCS_Hombro_Asiento",
-    )
+    # =========================================================================
+    # 2. BARRAS GUÍA Y SUFRIDERAS (2x Guia_08 + 2x Sufridera_Guia_05b)
+    # =========================================================================
+    lnk_guia_1, _ = asegurar_link(doc, asm, p("Guia_08.FCStd"), "Guia_1_08")
+    lnk_guia_2, _ = asegurar_link(doc, asm, p("Guia_08.FCStd"), "Guia_2_08")
+    asegurar_junta(doc, asm, jg, "Joint_Guia_1", "Fixed", lnk_tapa_int, "LCS_Guia_1", lnk_guia_1, "LCS_Hombro_Asiento")
+    asegurar_junta(doc, asm, jg, "Joint_Guia_2", "Fixed", lnk_tapa_int, "LCS_Guia_2", lnk_guia_2, "LCS_Hombro_Asiento")
 
-    # 4. Émbolo de Delrin con junta corredera (Slider) sobre Guia_1_08
-    # Posición inicial a mitad de carrera (Z = 115 mm sobre el hombro de la guía)
-    # y límites de carrera entre las dos tapas (15 mm a 215 mm).
+    lnk_sufr_guia_1, _ = asegurar_link(doc, asm, p("Sufridera_Guia_05b.FCStd"), "Sufridera_Guia_1_05b")
+    lnk_sufr_guia_2, _ = asegurar_link(doc, asm, p("Sufridera_Guia_05b.FCStd"), "Sufridera_Guia_2_05b")
+    asegurar_junta(doc, asm, jg, "Joint_Sufridera_Guia_1", "Fixed", lnk_tapa_int, "LCS_Guia_1", lnk_sufr_guia_1, "LCS_Cara_Sup")
+    asegurar_junta(doc, asm, jg, "Joint_Sufridera_Guia_2", "Fixed", lnk_tapa_int, "LCS_Guia_2", lnk_sufr_guia_2, "LCS_Cara_Sup")
+
+    # =========================================================================
+    # 3. TREN MÓVIL DEL ÉMBOLO (Slider + 4 piezas solidarias Fixed)
+    # =========================================================================
+    lnk_embolo, _ = asegurar_link(doc, asm, p("Embolo_Delrin_10.FCStd"), "Embolo_Delrin_10")
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Corredera_Embolo",
-        "Slider",
-        lnk_guia_1,
-        "LCS_Hombro_Asiento",
-        lnk_embolo,
-        "LCS_Guia_1",
+        doc, asm, jg, "Joint_Corredera_Embolo", "Slider",
+        lnk_guia_1, "LCS_Hombro_Asiento",
+        lnk_embolo, "LCS_Guia_1",
         offset1=App.Placement(App.Vector(0, 0, 115), App.Rotation()),
         propiedades_extra={
             "EnableLengthMin": True,
@@ -374,88 +350,133 @@ def main():
         },
     )
 
-    # 5. Targets ferromagnéticos AISI 430 en ambas caras del émbolo (Fixed)
+    # 3.1 Centro Émbolo 1 y 2 (Plano 11 y 12) unidos rígidamente al émbolo
+    lnk_ce1, _ = asegurar_link(doc, asm, p("Centro_Embolo_1_11.FCStd"), "Centro_Embolo_1_11")
+    lnk_ce2, _ = asegurar_link(doc, asm, p("Centro_Embolo_2_12.FCStd"), "Centro_Embolo_2_12")
+    asegurar_junta(doc, asm, jg, "Joint_Centro_Embolo_1", "Fixed", lnk_embolo, "LCS_Origen", lnk_ce1, "LCS_Asiento_Brida")
+    asegurar_junta(doc, asm, jg, "Joint_Centro_Embolo_2", "Fixed", lnk_embolo, "LCS_Cara_Sup", lnk_ce2, "LCS_Origen")
+
+    # 3.2 Targets ferromagnéticos AISI 430 en ambas caras del émbolo
+    lnk_target_1, _ = asegurar_link(doc, asm, p("Sensor_Piston_05b.FCStd"), "Sensor_Piston_1_05b")
+    lnk_target_2, _ = asegurar_link(doc, asm, p("Sensor_Piston_05b.FCStd"), "Sensor_Piston_2_05b")
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Target_Int",
-        "Fixed",
-        lnk_embolo,
-        "LCS_Sensor_1",
-        lnk_target_1,
-        "LCS_Asiento_Embolo",
+        doc, asm, jg, "Joint_Target_Int", "Fixed",
+        lnk_embolo, "LCS_Sensor_1",
+        lnk_target_1, "LCS_Asiento_Embolo",
         offset2=App.Placement(App.Vector(0, 0, 0), App.Rotation(App.Vector(1, 0, 0), 180)),
     )
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Target_Ext",
-        "Fixed",
-        lnk_embolo,
-        "LCS_Sensor_2",
-        lnk_target_2,
-        "LCS_Asiento_Embolo",
+        doc, asm, jg, "Joint_Target_Ext", "Fixed",
+        lnk_embolo, "LCS_Sensor_2",
+        lnk_target_2, "LCS_Asiento_Embolo",
     )
 
-    # 6. Camisa acrílica y Tapa Exterior (Fixed)
+    # =========================================================================
+    # 4. CAMISA Y TAPA EXTERIOR
+    # =========================================================================
+    lnk_cilindro, _ = asegurar_link(doc, asm, p("Cilindro_09.FCStd"), "Cilindro_09")
+    lnk_tapa_ext, _ = asegurar_link(doc, asm, p("Tapa_Exterior_16a.FCStd"), "Tapa_Exterior_16a")
+    asegurar_junta(doc, asm, jg, "Joint_Cilindro", "Fixed", lnk_tapa_int, "LCS_Piso_Tubo_110_5", lnk_cilindro, "LCS_Origen")
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Cilindro",
-        "Fixed",
-        lnk_tapa_int,
-        "LCS_Piso_Tubo_110_5",
-        lnk_cilindro,
-        "LCS_Origen",
-    )
-    asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Tapa_Exterior",
-        "Fixed",
-        lnk_cilindro,
-        "LCS_Extremo_Sup",
-        lnk_tapa_ext,
-        "LCS_Piso_Tubo_110_5",
+        doc, asm, jg, "Joint_Tapa_Exterior", "Fixed",
+        lnk_cilindro, "LCS_Extremo_Sup",
+        lnk_tapa_ext, "LCS_Piso_Tubo_110_5",
         offset2=App.Placement(App.Vector(0, 0, 0), App.Rotation(App.Vector(1, 0, 0), 180)),
     )
 
-    # 7. Sensores inductivos M12x1 en las tapas (Fixed)
+    # =========================================================================
+    # 5. SENSORES INDUCTIVOS COMERCIALES LJ12A3 EN LAS TAPAS
+    # =========================================================================
+    lnk_sens_int, _ = asegurar_link(doc, asm, p("Sensor_Inductivo_LJ12A3.FCStd"), "Sensor_Inductivo_Int")
+    lnk_sens_ext, _ = asegurar_link(doc, asm, p("Sensor_Inductivo_LJ12A3.FCStd"), "Sensor_Inductivo_Ext")
+    asegurar_junta(doc, asm, jg, "Joint_Sensor_Inductivo_Int", "Fixed", lnk_tapa_int, "LCS_Puerto_M12x1", lnk_sens_int, "LCS_Origen")
+    asegurar_junta(doc, asm, jg, "Joint_Sensor_Inductivo_Ext", "Fixed", lnk_tapa_ext, "LCS_Puerto_M12x1", lnk_sens_ext, "LCS_Origen")
+
+    # =========================================================================
+    # 6. HUSILLO Y TREN DE TRANSMISIÓN (Planos 14, 5a, 5b, 4, 3, 2b, 2a)
+    # =========================================================================
+    lnk_husillo, _ = asegurar_link(doc, asm, p("Tornillo_Sin_Fin_14.FCStd"), "Tornillo_Sin_Fin_14")
+    asegurar_junta(doc, asm, jg, "Joint_Husillo", "Fixed", lnk_tapa_int, "LCS_Acople_Husillo", lnk_husillo, "LCS_Origen")
+
+    lnk_sufr_ext, _ = asegurar_link(doc, asm, p("Sufridera_Eje_Ext_05a.FCStd"), "Sufridera_Eje_Ext_05a")
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Sensor_Inductivo_Int",
-        "Fixed",
-        lnk_tapa_int,
-        "LCS_Puerto_M12x1",
-        lnk_sens_int,
-        "LCS_Origen",
+        doc, asm, jg, "Joint_Sufridera_Eje_Ext", "Fixed",
+        lnk_tapa_ext, "LCS_Asiento_Sufridera_Ext",
+        lnk_sufr_ext, "LCS_Origen",
+        offset2=App.Placement(App.Vector(0, 0, 0), App.Rotation(App.Vector(1, 0, 0), 180)),
+    )
+
+    lnk_sufr_int, _ = asegurar_link(doc, asm, p("Sufridera_Int_05b.FCStd"), "Sufridera_Int_05b")
+    asegurar_junta(doc, asm, jg, "Joint_Sufridera_Int", "Fixed", lnk_tapa_int, "LCS_Asiento_Sufridera_Int", lnk_sufr_int, "LCS_Origen")
+
+    lnk_tapa_sufr_int, _ = asegurar_link(doc, asm, p("Tapa_Sufridera_Int_05a.FCStd"), "Tapa_Sufridera_Int_05a")
+    asegurar_junta(doc, asm, jg, "Joint_Tapa_Sufridera_Int", "Fixed", lnk_tapa_int, "LCS_Origen", lnk_tapa_sufr_int, "LCS_Origen")
+
+    lnk_adap_eje, _ = asegurar_link(doc, asm, p("Adaptador_Eje_04.FCStd"), "Adaptador_Eje_04")
+    asegurar_junta(doc, asm, jg, "Joint_Adaptador_Eje", "Fixed", lnk_tapa_int, "LCS_Origen", lnk_adap_eje, "LCS_Cara_Superior")
+
+    lnk_adap_rod, _ = asegurar_link(doc, asm, p("Adaptador_Rodamiento_03.FCStd"), "Adaptador_Rodamiento_03")
+    asegurar_junta(doc, asm, jg, "Joint_Adaptador_Rodamiento", "Fixed", lnk_adap_eje, "LCS_Origen", lnk_adap_rod, "LCS_Tope_Superior")
+
+    lnk_transm_2, _ = asegurar_link(doc, asm, p("Transmisor_2_02b.FCStd"), "Transmisor_2_02b")
+    asegurar_junta(doc, asm, jg, "Joint_Transmisor_2", "Fixed", lnk_husillo, "LCS_Pasador", lnk_transm_2, "LCS_Pasador_3")
+
+    lnk_transm_1, _ = asegurar_link(doc, asm, p("Transmisor_1_02a.FCStd"), "Transmisor_1_02a")
+    asegurar_junta(doc, asm, jg, "Joint_Transmisor_1", "Fixed", lnk_transm_2, "LCS_Asiento_Rodamiento", lnk_transm_1, "LCS_Extremo_Der")
+
+    # =========================================================================
+    # 7. ANILLOS TÓRICOS, ESTRUCTURA EXTERIOR Y TENSORES
+    # =========================================================================
+    lnk_anillo_int, _ = asegurar_link(doc, asm, p("Anillo_Torica_13.FCStd"), "Anillo_Torica_Int_13")
+    lnk_anillo_ext, _ = asegurar_link(doc, asm, p("Anillo_Torica_13.FCStd"), "Anillo_Torica_Ext_13")
+    asegurar_junta(doc, asm, jg, "Joint_Anillo_Torica_Int", "Fixed", lnk_tapa_int, "LCS_Tope_Resalte", lnk_anillo_int, "LCS_Origen")
+    asegurar_junta(doc, asm, jg, "Joint_Anillo_Torica_Ext", "Fixed", lnk_tapa_ext, "LCS_Tope_Resalte", lnk_anillo_ext, "LCS_Origen")
+
+    lnk_estruct_1, _ = asegurar_link(doc, asm, p("Estructura_Interior_07.FCStd"), "Estructura_Interior_1_07")
+    lnk_estruct_2, _ = asegurar_link(doc, asm, p("Estructura_Interior_07.FCStd"), "Estructura_Interior_2_07")
+    asegurar_junta(doc, asm, jg, "Joint_Estructura_1", "Fixed", lnk_tapa_int, "LCS_Asiento_Carcasa_145mm", lnk_estruct_1, "LCS_Origen")
+    asegurar_junta(doc, asm, jg, "Joint_Estructura_2", "Fixed", lnk_tapa_ext, "LCS_Asiento_Carcasa_145mm", lnk_estruct_2, "LCS_Origen")
+
+    lnk_cierre_1, _ = asegurar_link(doc, asm, p("Cierre_Estructura_15.FCStd"), "Cierre_Estructura_1_15")
+    lnk_cierre_2, _ = asegurar_link(doc, asm, p("Cierre_Estructura_15.FCStd"), "Cierre_Estructura_2_15")
+    asegurar_junta(
+        doc, asm, jg, "Joint_Cierre_1", "Fixed",
+        lnk_estruct_1, "LCS_Tope_Resalte",
+        lnk_cierre_1, "LCS_Origen",
+        offset2=App.Placement(App.Vector(0, 0, 0), App.Rotation(45, 0, 0)),
     )
     asegurar_junta(
-        doc,
-        asm,
-        jg,
-        "Joint_Sensor_Inductivo_Ext",
-        "Fixed",
-        lnk_tapa_ext,
-        "LCS_Puerto_M12x1",
-        lnk_sens_ext,
-        "LCS_Origen",
+        doc, asm, jg, "Joint_Cierre_2", "Fixed",
+        lnk_estruct_2, "LCS_Tope_Resalte",
+        lnk_cierre_2, "LCS_Origen",
+        offset2=App.Placement(App.Vector(0, 0, 0), App.Rotation(45, 0, 0)),
     )
+
+    for idx in range(1, 5):
+        lnk_tensor, _ = asegurar_link(doc, asm, p("Tensor_06.FCStd"), f"Tensor_{idx}_06")
+        asegurar_junta(
+            doc, asm, jg, f"Joint_Tensor_{idx}", "Fixed",
+            lnk_estruct_1, f"LCS_Tensor_{idx}",
+            lnk_tensor, "LCS_Asiento_Estructura_1",
+        )
 
     # Ocultar los iconos de juntas en 3D para una vista limpia (el usuario puede activarlos en el árbol)
     for o in jg.Group:
         o.Visibility = False
 
-    # Declarar interfaces coaxiales y pares de rosca M8 / M12x1 para _herramientas/verificar_interfaces.py
-    import json
+    # Declarar interfaces coaxiales y pares de rosca para _herramientas/verificar_interfaces.py
     interfaces_piloto = {
         "coaxiales": [
+            {
+                "ref1": "Tapa_Interior_16b:M3_Guia_1_*",
+                "ref2": "Sufridera_Guia_1_05b:Agujero_[1-4]",
+                "descripcion": "4x M3 Sufridera Guía 1 <-> Tapa Interior",
+            },
+            {
+                "ref1": "Tapa_Interior_16b:M3_Guia_2_*",
+                "ref2": "Sufridera_Guia_2_05b:Agujero_[1-4]",
+                "descripcion": "4x M3 Sufridera Guía 2 <-> Tapa Interior",
+            },
             {
                 "ref1": "Tapa_Interior_16b:Puerto_M12x1",
                 "ref2": "Embolo_Delrin_10:M8_Sensor_1",
@@ -465,6 +486,42 @@ def main():
                 "ref1": "Tapa_Exterior_16a:Puerto_M12x1",
                 "ref2": "Embolo_Delrin_10:M8_Sensor_2",
                 "descripcion": "Sensor inductivo Tapa Exterior (-45°) <-> Target 2 Émbolo (Z=20)",
+            },
+            {
+                "ref1": "Embolo_Delrin_10:M3_Inf_*",
+                "ref2": "Centro_Embolo_1_11:Aguj_Brida_*",
+                "descripcion": "4x M3 Centro Émbolo 1 <-> Émbolo Delrin",
+                "tol_mm": 0.06,
+            },
+            {
+                "ref1": "Centro_Embolo_1_11:M3_Sup_*",
+                "ref2": "Centro_Embolo_2_12:Aguj_M3_*",
+                "descripcion": "3x M3 Centro Émbolo 1 <-> Centro Émbolo 2",
+            },
+            {
+                "ref1": "Transmisor_1_02a:Agujero_Pasador_1",
+                "ref2": "Transmisor_2_02b:Pasador_1",
+                "descripcion": "Pasador transversal 1 Transmisor 1 <-> Transmisor 2",
+            },
+            {
+                "ref1": "Transmisor_1_02a:Agujero_Pasador_2",
+                "ref2": "Transmisor_2_02b:Pasador_2",
+                "descripcion": "Pasador transversal 2 Transmisor 1 <-> Transmisor 2",
+            },
+            {
+                "ref1": "Transmisor_2_02b:Pasador_3",
+                "ref2": "Tornillo_Sin_Fin_14:Agujero_Pasador",
+                "descripcion": "Pasador transversal 3 Transmisor 2 <-> Tornillo Sin Fin",
+            },
+            {
+                "ref1": "Estructura_Interior_1_07:Rosca_M5_*",
+                "ref2": "Cierre_Estructura_1_15:Aguj_Brida_*",
+                "descripcion": "4x M5 Estructura Interior 1 <-> Cierre 1",
+            },
+            {
+                "ref1": "Estructura_Interior_2_07:Rosca_M5_*",
+                "ref2": "Cierre_Estructura_2_15:Aguj_Brida_*",
+                "descripcion": "4x M5 Estructura Interior 2 <-> Cierre 2",
             },
             {
                 "ref1": "Tapa_Interior_16b:Puerto_M12x1",
@@ -480,8 +537,57 @@ def main():
         "pares_rosca_ajuste": [
             ["Embolo_Delrin_10", "Sensor_Piston_1_05b"],
             ["Embolo_Delrin_10", "Sensor_Piston_2_05b"],
+            ["Centro_Embolo_1_11", "Tornillo_Sin_Fin_14"],
+            ["Centro_Embolo_2_12", "Tornillo_Sin_Fin_14"],
+            ["Tornillo_Sin_Fin_14", "Transmisor_2_02b"],
             ["Tapa_Interior_16b", "Sensor_Inductivo_Int"],
             ["Tapa_Exterior_16a", "Sensor_Inductivo_Ext"],
+        ],
+        "interferencias_plano": [
+            {
+                "par": ["Tapa_Interior_16b", "Sufridera_Int_05b"],
+                "motivo": "FICHA 16b Secc. 5: rebaje d_reb2=41.00 mm en Plano 16b vs d_ext=45.00 mm en Plano 5b",
+            },
+            {
+                "par": ["Adaptador_Rodamiento_03", "Transmisor_2_02b"],
+                "motivo": "FICHA 03/02b: agujero d_paso=13.10 mm en Plano 3 vs collar d_collar=15.00 mm en Plano 2b",
+            },
+            {
+                "par": ["Adaptador_Rodamiento_03", "Transmisor_1_02a"],
+                "motivo": "FICHA 03/02a: solape axial del manguito Ø20 mm de Plano 2a con la base de Plano 3",
+            },
+            {
+                "par": ["Cierre_Estructura_1_15", "Tensor_1_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_1_15", "Tensor_2_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_1_15", "Tensor_3_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_1_15", "Tensor_4_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_2_15", "Tensor_1_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_2_15", "Tensor_2_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_2_15", "Tensor_3_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
+            {
+                "par": ["Cierre_Estructura_2_15", "Tensor_4_06"],
+                "motivo": "FICHA 15/07: brida d_ext=176 mm (R=88 mm) roza tensores Ø22 en (69,69) (R_int=86.58 mm)",
+            },
         ],
     }
     if not hasattr(asm, "Interfaces_Declaradas"):
@@ -501,7 +607,8 @@ def main():
     sincronizar_modo_diseno_piezas_piloto(doc, pg)
     doc.recompute()
     doc.saveAs(RUTA_SALIDA)
-    print("Guardado:", RUTA_SALIDA)
+    print("Guardado exitosamente:", RUTA_SALIDA)
 
 
-main()
+if __name__ == "__main__":
+    main()
