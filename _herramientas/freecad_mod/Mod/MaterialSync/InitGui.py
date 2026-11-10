@@ -3,9 +3,43 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 
+def sanear_juntas_assembly(doc):
+    """
+    Sanea automáticamente los ViewProviders de juntas de Assembly::AssemblyObject
+    si el documento fue generado en modo headless (freecadcmd), evitando errores
+    de 'int object has no attribute redrawJointPlacements' en la GUI.
+    """
+    if not App.GuiUp or not doc:
+        return
+    try:
+        import JointObject
+        for o in getattr(doc, "Objects", []):
+            if o.isDerivedFrom("App::FeaturePython") and getattr(o, "ViewObject", None):
+                vo = o.ViewObject
+                proxy = getattr(vo, "Proxy", None)
+                if hasattr(o, "JointType"):
+                    if not isinstance(proxy, JointObject.ViewProviderJoint) or not hasattr(proxy, "app_obj"):
+                        vp = JointObject.ViewProviderJoint(vo)
+                        vp.app_obj = o
+                        vp.attach(vo)
+                elif hasattr(o, "ObjectToGround"):
+                    if not isinstance(proxy, JointObject.ViewProviderGroundedJoint) or not hasattr(proxy, "app_obj"):
+                        vp = JointObject.ViewProviderGroundedJoint(vo)
+                        vp.app_obj = o
+                        vp.attach(vo)
+    except Exception:
+        pass
+
+
 class MaterialSyncObserver:
     def __init__(self):
         self._in_sync = False
+
+    def slotActivatedDocument(self, doc):
+        sanear_juntas_assembly(doc)
+
+    def slotCreatedDocument(self, doc):
+        sanear_juntas_assembly(doc)
 
     def slotChangedObject(self, obj, prop):
         if self._in_sync or not obj:
@@ -20,6 +54,7 @@ class MaterialSyncObserver:
             self.sync_document(obj.Document)
 
     def slotFinishRecomputeDocument(self, doc):
+        sanear_juntas_assembly(doc)
         if self._in_sync or not doc:
             return
         if doc.getObject("Materiales_Generales") or doc.getObject("Materiales"):

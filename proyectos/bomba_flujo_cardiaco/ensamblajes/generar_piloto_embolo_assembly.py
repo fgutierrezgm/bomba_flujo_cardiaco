@@ -80,9 +80,19 @@ def asegurar_grounded(jg, link_fijo, nombre="GroundedJoint"):
     """Asegura que exista un GroundedJoint para la pieza base."""
     for o in jg.Group:
         if hasattr(o, "ObjectToGround") and o.ObjectToGround == link_fijo:
+            if App.GuiUp and getattr(o, "ViewObject", None) is not None:
+                vp = getattr(o.ViewObject, "Proxy", None)
+                if not isinstance(vp, JointObject.ViewProviderGroundedJoint) or not hasattr(vp, "app_obj"):
+                    vp = JointObject.ViewProviderGroundedJoint(o.ViewObject)
+                    vp.app_obj = o
+                    vp.attach(o.ViewObject)
             return o
     g = jg.newObject("App::FeaturePython", nombre)
     JointObject.GroundedJoint(g, link_fijo)
+    if App.GuiUp and getattr(g, "ViewObject", None) is not None:
+        vp = JointObject.ViewProviderGroundedJoint(g.ViewObject)
+        vp.app_obj = g
+        vp.attach(g.ViewObject)
     return g
 
 
@@ -107,6 +117,12 @@ def asegurar_junta(
     """
     existente = doc.getObject(nombre_junta)
     if existente is not None:
+        if App.GuiUp and getattr(existente, "ViewObject", None) is not None:
+            vp = getattr(existente.ViewObject, "Proxy", None)
+            if not isinstance(vp, JointObject.ViewProviderJoint) or not hasattr(vp, "app_obj"):
+                vp = JointObject.ViewProviderJoint(existente.ViewObject)
+                vp.app_obj = existente
+                vp.attach(existente.ViewObject)
         return existente
 
     off1 = offset1 if offset1 is not None else App.Placement()
@@ -124,6 +140,11 @@ def asegurar_junta(
     j = jg.newObject("App::FeaturePython", nombre_junta)
     idx_tipo = JointObject.JointTypes.index(tipo_junta)
     JointObject.Joint(j, idx_tipo)
+
+    if App.GuiUp and getattr(j, "ViewObject", None) is not None:
+        vp = JointObject.ViewProviderJoint(j.ViewObject)
+        vp.app_obj = j
+        vp.attach(j.ViewObject)
 
     # Configurar conectores apuntando a los LCS (PartDesign::CoordinateSystem)
     # FreeCAD Assembly espera 2 entradas en la lista de subnombres (elemento y vértice)
