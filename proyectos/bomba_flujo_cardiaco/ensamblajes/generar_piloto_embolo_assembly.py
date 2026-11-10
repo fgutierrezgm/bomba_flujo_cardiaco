@@ -396,7 +396,12 @@ def main():
     # 6. HUSILLO Y TREN DE TRANSMISIÓN (Planos 14, 5a, 5b, 4, 3, 2b, 2a)
     # =========================================================================
     lnk_husillo, _ = asegurar_link(doc, asm, p("Tornillo_Sin_Fin_14.FCStd"), "Tornillo_Sin_Fin_14")
-    asegurar_junta(doc, asm, jg, "Joint_Husillo", "Fixed", lnk_tapa_int, "LCS_Acople_Husillo", lnk_husillo, "LCS_Origen")
+    asegurar_junta(
+        doc, asm, jg, "Joint_Husillo", "Fixed",
+        lnk_tapa_int, "LCS_Acople_Husillo",
+        lnk_husillo, "LCS_Origen",
+        offset2=App.Placement(App.Vector(0, 0, -5.0), App.Rotation()),
+    )
 
     lnk_sufr_ext, _ = asegurar_link(doc, asm, p("Sufridera_Eje_Ext_05a.FCStd"), "Sufridera_Eje_Ext_05a")
     asegurar_junta(
@@ -416,7 +421,12 @@ def main():
     asegurar_junta(doc, asm, jg, "Joint_Adaptador_Eje", "Fixed", lnk_tapa_int, "LCS_Origen", lnk_adap_eje, "LCS_Cara_Superior")
 
     lnk_adap_rod, _ = asegurar_link(doc, asm, p("Adaptador_Rodamiento_03.FCStd"), "Adaptador_Rodamiento_03")
-    asegurar_junta(doc, asm, jg, "Joint_Adaptador_Rodamiento", "Fixed", lnk_adap_eje, "LCS_Origen", lnk_adap_rod, "LCS_Tope_Superior")
+    asegurar_junta(
+        doc, asm, jg, "Joint_Adaptador_Rodamiento", "Fixed",
+        lnk_adap_eje, "LCS_Origen",
+        lnk_adap_rod, "LCS_Tope_Superior",
+        offset2=App.Placement(App.Vector(0, 0, -16.0), App.Rotation()),
+    )
 
     lnk_transm_2, _ = asegurar_link(doc, asm, p("Transmisor_2_02b.FCStd"), "Transmisor_2_02b")
     asegurar_junta(doc, asm, jg, "Joint_Transmisor_2", "Fixed", lnk_husillo, "LCS_Pasador", lnk_transm_2, "LCS_Pasador_3")
