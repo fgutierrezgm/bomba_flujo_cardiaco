@@ -1,0 +1,9 @@
+# Respaldos automáticos de FreeCAD (el historial lo lleva git)
+*.FCBak
+*.FCStd1
+# Python
+__pycache__/
+*.pyc
+# Temporales
+*.tmp
+.~lock*
