@@ -1,0 +1,80 @@
+# Macro: Aislar_Toggle.FCMacro
+# Funciona igual que "Aislar / Deshacer Aislar" de Inventor:
+# - 1er toque (con piezas seleccionadas): guarda el estado actual y deja visibles solo las elegidas.
+# - 2do toque: restaura exactamente la visibilidad anterior (sin prender auxiliares ni LCS).
+import FreeCAD as App
+import FreeCADGui as Gui
+
+
+def _seleccion_en_doc(doc):
+    res = []
+    for sx in Gui.Selection.getSelectionEx("", 0):
+        obj_raiz = doc.getObject(sx.ObjectName)
+        if sx.SubElementNames:
+            for sub in sx.SubElementNames:
+                for p in [t for t in sub.split(".") if t]:
+                    cand = doc.getObject(p)
+                    if cand is not None and cand != obj_raiz:
+                        if cand not in res:
+                            res.append(cand)
+                        break
+        if not res and obj_raiz is not None and obj_raiz not in res:
+            res.append(obj_raiz)
+    if not res:
+        for s in Gui.Selection.getSelection():
+            cand = doc.getObject(s.Name)
+            if cand is not None and cand not in res:
+                res.append(cand)
+    return res
+
+
+doc = App.ActiveDocument
+if doc:
+    clave_estado = f"_aislado_{doc.Name}"
+    estado_previo = getattr(App, clave_estado, None)
+
+    if estado_previo is not None:
+        # --- DESHACER AISLAR ---
+        for nombre_obj, era_visible in estado_previo.items():
+            obj = doc.getObject(nombre_obj)
+            if obj is not None:
+                obj.Visibility = era_visible
+        delattr(App, clave_estado)
+        Gui.SendMsgToActiveView("ViewFit")
+        App.Console.PrintMessage("🔓 Deshacer Aislar: Vista previa restaurada.\n")
+    else:
+        # --- AISLAR SELECCIÓN ---
+        sel = _seleccion_en_doc(doc)
+        if not sel:
+            App.Console.PrintWarning("⚠️ Seleccioná una o más piezas primero (con Ctrl+clic) para aislar.\n")
+        else:
+            # 1. Guardar foto exacta de la visibilidad actual antes de tocar nada
+            snapshot = {o.Name: o.Visibility for o in doc.Objects}
+            setattr(App, clave_estado, snapshot)
+
+            # 2. Identificar qué mantener encendido (seleccionados + sus hijos visibles + contenedores padres)
+            mantener = set()
+
+            def conservar_hijos_visibles(obj):
+                if hasattr(obj, "Group"):
+                    for h in obj.Group:
+                        if h.Visibility:
+                            mantener.add(h.Name)
+                            conservar_hijos_visibles(h)
+
+            for s in sel:
+                mantener.add(s.Name)
+                conservar_hijos_visibles(s)
+                padre = s.getParentGeoFeatureGroup()
+                while padre is not None:
+                    mantener.add(padre.Name)
+                    padre = padre.getParentGeoFeatureGroup()
+
+            # 3. Ocultar el resto del ensamblaje
+            for o in doc.Objects:
+                if o.Name not in mantener and o.Visibility:
+                    o.Visibility = False
+
+            Gui.Selection.clearSelection()
+            Gui.SendMsgToActiveView("ViewFit")
+            App.Console.PrintMessage(f"🔒 Aislado ({len(sel)} elem). Volvé a ejecutar para restaurar todo.\n")

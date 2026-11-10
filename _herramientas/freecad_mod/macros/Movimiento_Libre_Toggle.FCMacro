@@ -1,0 +1,85 @@
+# Macro: Movimiento_Libre_Toggle.FCMacro
+# - Con una pieza seleccionada (App::Link o App::Part): guarda la posición original del ensamblaje y activa las flechas 3D
+#   para moverla libremente con el mouse (podes repetirlo con varias piezas).
+# - Sin nada seleccionado (clic en el vacío): devuelve todas las piezas a su lugar original.
+import FreeCAD as App
+import FreeCADGui as Gui
+
+
+def _seleccion_en_doc(doc):
+    res = []
+    for sx in Gui.Selection.getSelectionEx("", 0):
+        obj_raiz = doc.getObject(sx.ObjectName)
+        if sx.SubElementNames:
+            for sub in sx.SubElementNames:
+                for p in [t for t in sub.split(".") if t]:
+                    cand = doc.getObject(p)
+                    if cand is not None and cand != obj_raiz:
+                        if cand not in res:
+                            res.append(cand)
+                        break
+        if not res and obj_raiz is not None and obj_raiz not in res:
+            res.append(obj_raiz)
+    if not res:
+        for s in Gui.Selection.getSelection():
+            cand = doc.getObject(s.Name)
+            if cand is not None and cand not in res:
+                res.append(cand)
+    return res
+
+
+doc = App.ActiveDocument
+if doc:
+    clave_pos = f"_mov_libre_{doc.Name}"
+    estado_pos = getattr(App, clave_pos, None)
+    sel = _seleccion_en_doc(doc)
+
+    if not sel:
+        # --- SIN SELECCIÓN: RESTAURAR TODAS LAS PIEZAS A SU POSICIÓN ORIGINAL ---
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+        if estado_pos is not None:
+            for nombre_obj, (plac_orig, exprs_orig) in estado_pos.items():
+                obj = doc.getObject(nombre_obj)
+                if obj is not None and hasattr(obj, "Placement"):
+                    obj.Placement = plac_orig
+                    for prop, expr in exprs_orig:
+                        try:
+                            obj.setExpression(prop, expr)
+                        except Exception:
+                            pass
+            delattr(App, clave_pos)
+            doc.recompute()
+            App.Console.PrintMessage("🧲 Movimiento Libre finalizado: Todas las piezas volvieron a su lugar.\n")
+        else:
+            App.Console.PrintWarning("⚠️ Seleccioná una pieza para moverla libremente, o mové alguna primero.\n")
+    else:
+        # --- CON PIEZA SELECCIONADA: GUARDAR FOTO INICIAL Y ACTIVAR FLECHAS 3D ---
+        if Gui.Control.activeDialog():
+            Gui.Control.closeDialog()
+
+        # 1. Si es la primera pieza que movemos, guardar Placement y fórmulas de todo el ensamblaje
+        if estado_pos is None:
+            snapshot = {}
+            for o in doc.Objects:
+                if hasattr(o, "Placement"):
+                    exprs_plac = [(p, e) for p, e in o.ExpressionEngine if "Placement" in p]
+                    snapshot[o.Name] = (o.Placement.copy(), exprs_plac)
+            setattr(App, clave_pos, snapshot)
+            App.Console.PrintMessage("🔓 Modo Movimiento Libre activo. Tocá en el vacío y ejecutá de nuevo para restaurar.\n")
+
+        # 2. Si tocó un sólido dentro de un App::Part local, mover el App::Part contenedor
+        obj_mover = sel[0]
+        if obj_mover.TypeId != "App::Link":
+            padre = obj_mover.getParentGeoFeatureGroup()
+            if padre is not None and padre.TypeId == "App::Part" and padre.getParentGeoFeatureGroup() is not None:
+                obj_mover = padre
+
+        # 3. Liberar temporalmente expresiones de Placement para que deje arrastrar libremente
+        for prop, _ in list(obj_mover.ExpressionEngine):
+            if "Placement" in prop:
+                obj_mover.setExpression(prop, None)
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, obj_mover.Name)
+        Gui.runCommand("Std_TransformManip", 0)
