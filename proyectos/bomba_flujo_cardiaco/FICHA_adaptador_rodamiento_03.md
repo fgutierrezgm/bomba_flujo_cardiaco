@@ -22,10 +22,10 @@ Material: Latón / Acero inoxidable (según especificación del subconjunto de t
 | Cota axial fin de escalón Ø40 (`z_ref_882`) | `8.82 mm` | plano | alta | Desde `z = 0` (`3.82 mm` sobre la brida) |
 | Cota axial inicio cuerpo Ø37.50 (`z_esc`) | `11.68 mm` | plano | alta | Entre `8.82` y `11.68 mm` el plano dibuja una garganta cuyo Ø de fondo no está acotado |
 | Diámetro cuerpo superior (`d_cuerpo2`) | `Ø37.50 mm` | plano | alta | Tipo `S`; tramo desde `z = 11.68` hasta `25.50 mm` |
-| Agujero central pasante (`d_paso`) | `Ø13.10 mm` | plano | alta | Tipo `H`; da paso libre al escalón `Ø13.00` del `Transmisor_2_02b` |
+| Agujero central pasante (`d_paso`) | `Ø16.00 mm` (`Ø13.10 mm` en plano original) | usuario | alta | Ampliado a `Ø16.00 mm` para dar holgura radial ($0.50\,\text{mm}$) al collar de `Ø15.00 mm` del `Transmisor_2_02b` |
 | Diámetro alojamiento rodamiento (`d_aloj_rod`) | `Ø32.00 mm` | plano | alta | Tipo `H`; para aro exterior de rodamiento SKF 6201 (`D = 32 mm`) |
 | Profundidad alojamiento rodamiento (`p_aloj_rod`) | `10.50 mm` | plano | alta | Para ancho `B = 10 mm` del 6201 (ver nota de coherencia en sección 5) |
-| Diámetro rebaje bajo rodamiento (`d_rebaje`) | `Ø15.00 mm` | plano | alta | Tipo `H`; alivio bajo el piso del rodamiento |
+| Diámetro rebaje bajo rodamiento (`d_rebaje`) | `Ø16.00 mm` (`Ø15.00 mm` en plano original) | usuario | alta | Ampliado a `Ø16.00 mm` para unificar el paso libre y evitar fricción parásita con collar Ø15 |
 | Profundidad rebaje bajo rodamiento (`p_rebaje`) | `5.00 mm` | plano | alta | En Sección J-J |
 | Círculo de agujeros de brida (`d_cor`) | `Ø49.00 mm` | plano | alta | 4 agujeros a `0°, 90°, 180°, 270°` (ver discrepancia con Plano Nº 4 en sección 5) |
 | Diámetro agujeros de brida (`d_aguj`) | `Ø3.10 mm` | plano | alta | Tipo `H`; paso para tornillos M3 |
@@ -57,4 +57,4 @@ Garganta exterior entre `8.82` y `11.68 mm` (sin diámetro acotado en el plano o
 |---|---|---|---|---|---|
 | 1 | Desalineación entre la corona de `Ø49.00 mm` (Plano 3) y `Ø50.00 mm` (Plano 4) impide el montaje de los 4 tornillos M3 | Unificar el diámetro de corona en ambos planos (`Ø50.00 mm` o `Ø49.00 mm`) y ampliar los agujeros pasantes a `Ø3.40 mm` (serie media ISO 273 para M3) | Crítico (sin esto las piezas no ensamblan) | Bajo | propuesta |
 | 2 | El alojamiento `Ø32.00 mm` para el rodamiento SKF 6201 no tiene tolerancia dimensional especificada | Especificar ajuste **Ø32 H7** (`+0.025 / 0 mm`) o **J7** según carga en el plano de taller y radio máximo de fondo $r_{\text{máx}} \le 0.6\,\text{mm}$ (radio del 6201: $r = 0.6\,\text{mm}$) | Alto (evita giro del aro exterior o bloqueo del rodamiento) | Bajo | propuesta |
-| 3 | El rebaje de `Ø15.00 mm` tiene igual diámetro nominal que el collar de `Ø15.00 mm` del `Transmisor_2_02b` | Ampliar el diámetro del rebaje interior a `Ø16.00` o `Ø17.00 mm` (el diámetro del hombro del aro interior del 6201 es $d_1 \approx 18.2\,\text{mm}$, por lo que apoya perfectamente sobre el aro exterior sin riesgo de roce con el eje) | Medio (evita fricción parásita si el collar asoma al rebaje) | Bajo | propuesta |
+| 3 | El rebaje de `Ø15.00 mm` y agujero de paso `Ø13.10 mm` colisionaban con el collar de `Ø15.00 mm` del `Transmisor_2_02b` | Ampliar el diámetro del rebaje y paso interior a `Ø16.00 mm` (holgura radial $0.50\,\text{mm}$ para rotación sin fricción) | Crítico / Alto | Bajo | implementado |
