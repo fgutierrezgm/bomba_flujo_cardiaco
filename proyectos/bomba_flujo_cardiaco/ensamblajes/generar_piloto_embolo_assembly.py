@@ -163,27 +163,73 @@ def asegurar_junta(
 
 
 def aplicar_apariencia_piloto(doc, asm):
-    """Aplica colores de materiales y transparencia de inspección a camisa y tapa exterior."""
-    if not App.GuiUp:
-        return
-    transp_insp = {"Cilindro_09": 70, "Tapa_Exterior_16a": 70}
-    for o in asm.Group:
-        if o.TypeId != "App::Link" or getattr(o, "LinkedObject", None) is None:
-            continue
-        part_hijo = o.LinkedObject
-        mat_id = getattr(part_hijo, "Material_ID", "")
-        info = MATERIALES_BASE.get(mat_id)
-        if not info or getattr(o, "ViewObject", None) is None:
-            continue
+    """Crea/actualiza la hoja Materiales_Generales y aplica colores y transparencias visuales a cada componente."""
+    transp_insp_map = {"Cilindro_09": 75, "Tapa_Exterior_16a": 70}
+    mg = doc.getObject("Materiales_Generales")
+    if mg is None:
+        mg = asm.newObject("Spreadsheet::Sheet", "Materiales_Generales")
+        for celda, txt in (("A1", "COMPONENTE"), ("B1", "MATERIAL"), ("C1", "DENSIDAD"),
+                           ("D1", "COLOR_R"), ("E1", "COLOR_G"), ("F1", "COLOR_B"),
+                           ("G1", "TRANSP_BASE"), ("H1", "TRANSP_INSP"), ("I1", "PERSONALIZADO")):
+            mg.set(celda, txt)
+
+    links = [o for o in asm.Group if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None)]
+    for idx, o in enumerate(links, start=2):
+        lo = o.LinkedObject
+        doc_h = lo.Document
+        hm = doc_h.getObject("Materiales")
+
+        nombre_mat = "Estándar"
+        dens_val = "0.00000785"
+        r_c, g_c, b_c = 0.75, 0.75, 0.75
+        tr_base = 0.0
+        if hm:
+            try:
+                nombre_mat = str(hm.get("material_nombre"))
+                dens_val = str(hm.get("densidad_mat"))
+                r_c = float(hm.get("color_r"))
+                g_c = float(hm.get("color_g"))
+                b_c = float(hm.get("color_b"))
+                tr_base = float(hm.get("transparencia_mat"))
+            except Exception:
+                pass
+
+        tr_insp = float(transp_insp_map.get(o.Name, 0))
+
+        personalizado = "0"
         try:
-            o.ViewObject.OverrideMaterial = True
-            mat = o.ViewObject.ShapeMaterial
-            mat.DiffuseColor = info["color"]
-            t_inst = transp_insp.get(o.Name, int(round(info["transparencia"])))
-            mat.Transparency = max(0.0, min(1.0, t_inst / 100.0))
-            o.ViewObject.ShapeMaterial = mat
+            if str(mg.get(f"I{idx}")) == "1":
+                personalizado = "1"
+                r_c = float(mg.get(f"D{idx}"))
+                g_c = float(mg.get(f"E{idx}"))
+                b_c = float(mg.get(f"F{idx}"))
+                tr_base = float(mg.get(f"G{idx}"))
+                tr_insp = float(mg.get(f"H{idx}"))
         except Exception:
             pass
+
+        mg.set(f"A{idx}", o.Name)
+        mg.set(f"B{idx}", nombre_mat)
+        mg.set(f"C{idx}", f"={dens_val}")
+        mg.set(f"D{idx}", f"{r_c:.3f}")
+        mg.set(f"E{idx}", f"{g_c:.3f}")
+        mg.set(f"F{idx}", f"{b_c:.3f}")
+        mg.set(f"G{idx}", f"{tr_base:.1f}")
+        mg.set(f"H{idx}", f"{tr_insp:.1f}")
+        mg.set(f"I{idx}", personalizado)
+
+        if App.GuiUp:
+            tr_efectiva = tr_insp if tr_insp > 0 else tr_base
+            vo = getattr(o, "ViewObject", None)
+            if vo:
+                vo.OverrideMaterial = True
+                mat = App.Material()
+                mat.DiffuseColor = (r_c, g_c, b_c)
+                mat.Transparency = max(0.0, min(1.0, tr_efectiva / 100.0))
+                if hasattr(vo, "ShapeAppearance"):
+                    vo.ShapeAppearance = (mat,)
+                elif hasattr(vo, "ShapeMaterial"):
+                    vo.ShapeMaterial = mat
 
 
 def main():
@@ -275,8 +321,8 @@ def main():
         propiedades_extra={
             "EnableLengthMin": True,
             "EnableLengthMax": True,
-            "LengthMin": 15.0,
-            "LengthMax": 215.0,
+            "LengthMin": -100.0,
+            "LengthMax": 100.0,
         },
     )
 
