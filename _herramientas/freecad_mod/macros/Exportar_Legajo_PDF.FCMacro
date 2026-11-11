@@ -1,0 +1,98 @@
+# -*- coding: utf-8 -*-
+"""
+Macro FreeCAD: Exportar_Legajo_PDF.FCMacro
+Exporta todas las láminas de dibujo técnico (TechDraw::DrawPage) del documento activo
+a un único archivo PDF consolidado y ordenado por número de hoja.
+
+Uso:
+  Abrir el documento de planos en FreeCAD y ejecutar esta macro desde:
+  Macro -> Macros -> Exportar_Legajo_PDF.FCMacro -> Ejecutar
+"""
+import os
+import shutil
+import subprocess
+import FreeCAD as App
+import FreeCADGui as Gui
+import TechDrawGui
+
+doc = App.ActiveDocument
+if not doc:
+    App.Console.PrintError("No hay ningún documento abierto en FreeCAD.\n")
+else:
+    paginas = [o for o in doc.Objects if o.TypeId == "TechDraw::DrawPage"]
+    if not paginas:
+        App.Console.PrintError("El documento activo no contiene páginas de TechDraw.\n")
+    else:
+        # Ordenar las páginas por su número correlativo de hoja (1..24)
+        def orden_pagina(p):
+            et = getattr(getattr(p, "Template", None), "EditableTexts", {})
+            hoja_txt = et.get("HOJA", "")
+            if "/" in hoja_txt:
+                try:
+                    return int(hoja_txt.split("/")[0])
+                except Exception:
+                    pass
+            # Si no, orden por nombre de objeto
+            return p.Name
+
+        paginas_ordenadas = sorted(paginas, key=orden_pagina)
+
+        # Directorio de salida por defecto (junto al .FCStd o en subcarpeta pdf)
+        dir_doc = os.path.dirname(getattr(doc, "FileName", "")) or os.path.expanduser("~")
+        dir_salida = os.path.join(dir_doc, "pdf")
+        os.makedirs(dir_salida, exist_ok=True)
+        ruta_pdf_final = os.path.join(dir_doc, f"{doc.Name}_Completo.pdf")
+
+        App.Console.PrintMessage(f"Exportando {len(paginas_ordenadas)} láminas a PDF...\n")
+
+        # Intentar exportación directa multipágina de TechDraw
+        exito_directo = False
+        try:
+            TechDrawGui.exportPageAsPdf(paginas_ordenadas, ruta_pdf_final)
+            exito_directo = os.path.exists(ruta_pdf_final) and os.path.getsize(ruta_pdf_final) > 1000
+        except Exception:
+            exito_directo = False
+
+        # Si la API nativa de esta versión requiere exportar hoja por hoja y luego consolidar:
+        if not exito_directo:
+            pdfs_individuales = []
+            dir_temp = os.path.join(dir_salida, "_temp_hojas")
+            os.makedirs(dir_temp, exist_ok=True)
+
+            for idx, pag in enumerate(paginas_ordenadas, start=1):
+                ruta_hoja = os.path.join(dir_temp, f"Hoja_{idx:02d}_{pag.Name}.pdf")
+                try:
+                    TechDrawGui.exportPageAsPdf(pag, ruta_hoja)
+                    if os.path.exists(ruta_hoja):
+                        pdfs_individuales.append(ruta_hoja)
+                except Exception as err:
+                    App.Console.PrintWarning(f"Error exportando {pag.Name}: {err}\n")
+
+            if pdfs_individuales:
+                # Unir con pdfunite o qpdf si están disponibles en el sistema
+                cmd_unir = None
+                if shutil.which("pdfunite"):
+                    cmd_unir = ["pdfunite"] + pdfs_individuales + [ruta_pdf_final]
+                elif shutil.which("qpdf"):
+                    cmd_unir = ["qpdf", "--empty", "--pages"] + pdfs_individuales + ["--", ruta_pdf_final]
+
+                if cmd_unir:
+                    try:
+                        subprocess.run(cmd_unir, check=True)
+                        shutil.rmtree(dir_temp, ignore_errors=True)
+                    except Exception as e:
+                        App.Console.PrintWarning(f"Error al consolidar PDFs: {e}\n")
+
+        if os.path.exists(ruta_pdf_final):
+            tam_mb = os.path.getsize(ruta_pdf_final) / (1024.0 * 1024.0)
+            App.Console.PrintMessage(
+                f"\n>>> ÉXITO: Legajo completo ({len(paginas_ordenadas)} láminas, {tam_mb:.2f} MB) exportado en:\n"
+                f"    {ruta_pdf_final}\n\n"
+            )
+            # Notificación en barra de estado de FreeCAD
+            if hasattr(Gui, "getMainWindow") and Gui.getMainWindow():
+                Gui.getMainWindow().statusBar().showMessage(
+                    f"PDF completo exportado: {os.path.basename(ruta_pdf_final)} ({tam_mb:.2f} MB)", 7000
+                )
+        else:
+            App.Console.PrintError("No se pudo generar el archivo PDF consolidado.\n")
