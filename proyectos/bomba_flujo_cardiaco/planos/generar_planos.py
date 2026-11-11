@@ -1414,6 +1414,22 @@ def main():
     doc_planos.saveAs(RUTA_SALIDA_FCSTD)
     print(f"Legajo guardado exitosamente ({total_hojas} hojas, {total_cotas_geom} cotas geométricas): {RUTA_SALIDA_FCSTD}")
 
+    # Guardar además cada lámina por separado en `planos/hojas/` para apertura rápida y exportación PDF sin trabar Qt
+    dir_hojas = os.path.join(DIR_PLANOS, "hojas")
+    os.makedirs(dir_hojas, exist_ok=True)
+    paginas = [o for o in doc_planos.Objects if o.TypeId == "TechDraw::DrawPage"]
+    for pag in paginas:
+        d_ind = App.newDocument(pag.Name)
+        d_ind.copyObject(pag, True)
+        d_ind.copyObject(dr, False)
+        for obj_i in d_ind.Objects:
+            if obj_i.isDerivedFrom("Part::Feature") and getattr(obj_i, "ViewObject", None):
+                obj_i.ViewObject.Visibility = False
+        d_ind.recompute()
+        d_ind.saveAs(os.path.join(dir_hojas, f"{pag.Name}.FCStd"))
+        App.closeDocument(d_ind.Name)
+    print(f"Generadas {len(paginas)} hojas individuales livianas en: {dir_hojas}")
+
     # Exportación opcional a PDF si el usuario define EXPORTAR_PDF=1 (Regla 3.1: desactivada por defecto)
     if os.environ.get("EXPORTAR_PDF") == "1":
         dir_pdf = os.path.join(DIR_PLANOS, "pdf")
