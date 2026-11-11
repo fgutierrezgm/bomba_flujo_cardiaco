@@ -55,6 +55,20 @@ MATERIALES_BASE = {
         "color": (0.35, 0.40, 0.45),
         "transparencia": 0,
     },
+    "Caucho_NBR": {
+        "nombre": "Elastómero NBR / Viton (FKM)",
+        "densidad_num": "0.00000125",
+        "densidad_desc": "1.25 g / cm^3 (kg / mm^3)",
+        "color": (0.12, 0.12, 0.14),
+        "transparencia": 0,
+    },
+    "Bronce": {
+        "nombre": "Bronce Sinterizado SAE 841 / DIN 1850",
+        "densidad_num": "0.00000680",
+        "densidad_desc": "6.80 g / cm^3 (kg / mm^3)",
+        "color": (0.76, 0.52, 0.22),
+        "transparencia": 0,
+    },
 }
 
 # tipo de parámetro -> fórmula de la columna B (valor efectivo). D = nominal, E = mecha

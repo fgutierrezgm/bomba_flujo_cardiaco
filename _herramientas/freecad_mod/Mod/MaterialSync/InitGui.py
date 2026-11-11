@@ -81,9 +81,60 @@ class MaterialSyncObserver:
                 f"[ModoDiseno] Sincronizado modo_diseno = {modo_global} en {len(docs_hijos)} piezas vinculadas.\n"
             )
 
+    @staticmethod
+    def sincronizar_rotulos_planos(doc):
+        """
+        Sincroniza los campos globales de la hoja 'Datos_Rotulo' hacia todos los rótulos
+        SVG ('TechDraw::DrawSVGTemplate') del documento de planos, estilo iProperties de Inventor.
+        """
+        if not doc or not hasattr(doc, "getObject"):
+            return
+        dr = doc.getObject("Datos_Rotulo")
+        if not dr:
+            return
+        campos_globales = {}
+        r = 2
+        while r < 40:
+            try:
+                clave = dr.get(f"A{r}")
+            except Exception:
+                break
+            if not clave:
+                break
+            clave_str = str(clave).strip()
+            try:
+                val = dr.get(f"B{r}")
+                val_str = str(val).strip() if val is not None else ""
+            except Exception:
+                val_str = ""
+            campos_globales[clave_str] = val_str
+            r += 1
+
+        if not campos_globales:
+            return
+
+        actualizados = 0
+        for o in getattr(doc, "Objects", []):
+            if o.TypeId == "TechDraw::DrawSVGTemplate" and hasattr(o, "EditableTexts"):
+                et = dict(o.EditableTexts)
+                cambio = False
+                for k, v in campos_globales.items():
+                    if k in et and et[k] != v:
+                        et[k] = v
+                        cambio = True
+                if cambio:
+                    o.EditableTexts = et
+                    actualizados += 1
+
+        if actualizados > 0:
+            App.Console.PrintMessage(
+                f"[RotuloSync] Actualizados automáticamente {actualizados} rótulos desde Datos_Rotulo.\n"
+            )
+
     def slotActivatedDocument(self, doc):
         self.sanear_juntas_assembly(doc)
         self.sincronizar_modo_diseno_global(doc)
+        self.sincronizar_rotulos_planos(doc)
 
     def slotCreatedDocument(self, doc):
         self.sanear_juntas_assembly(doc)
@@ -93,6 +144,8 @@ class MaterialSyncObserver:
             return
         if obj.Name == "Parametros_Generales":
             self.sincronizar_modo_diseno_global(obj.Document)
+        elif obj.Name == "Datos_Rotulo":
+            self.sincronizar_rotulos_planos(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
             self.sync_document(obj.Document)
 
@@ -101,12 +154,15 @@ class MaterialSyncObserver:
             return
         if obj.Name == "Parametros_Generales":
             self.sincronizar_modo_diseno_global(obj.Document)
+        elif obj.Name == "Datos_Rotulo":
+            self.sincronizar_rotulos_planos(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
             self.sync_document(obj.Document)
 
     def slotFinishRecomputeDocument(self, doc):
         self.sanear_juntas_assembly(doc)
         self.sincronizar_modo_diseno_global(doc)
+        self.sincronizar_rotulos_planos(doc)
         if self._in_sync or not doc:
             return
         if doc.getObject("Materiales_Generales") or doc.getObject("Materiales"):

@@ -96,6 +96,7 @@ solido = pz.corte("Embolo_Delrin_Solido", cuerpo, vaciado)
 # --- Conectores LCS
 pz.lcs("LCS_Origen")
 pz.lcs("LCS_Cara_Sup", z=p("h_total"))
+pz.lcs("LCS_Ranura_ORing", z=p("z_ran"))
 pz.lcs("LCS_Guia_1", x=f"-1 * ({p('d_c75')} / 2)")
 pz.lcs("LCS_Guia_2", x=f"{p('d_c75')} / 2")
 pz.lcs("LCS_Sensor_1",

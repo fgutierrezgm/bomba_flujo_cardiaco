@@ -47,6 +47,36 @@ def validar(ruta):
     links = [o for o in doc.Objects if o.TypeId == "App::Link"]
     asm_nativo = next((o for o in doc.Objects if o.isDerivedFrom("Assembly::AssemblyObject")), None)
     pg = next((h for h in hojas if h.Label == "Parametros_Generales"), None)
+    paginas_td = [o for o in doc.Objects if o.TypeId == "TechDraw::DrawPage"]
+
+    # --- MODO LEGAJO DE PLANOS (TechDraw) ---
+    if paginas_td:
+        vistas_total = 0
+        cotas_total = 0
+        globos_total = 0
+        for p in paginas_td:
+            if not getattr(p, "Template", None):
+                errores.append(f"Página {p.Name} ({p.Label}) no tiene plantilla SVG asignada")
+            vistas = [v for v in getattr(p, "Views", []) if v.TypeId == "TechDraw::DrawViewPart"]
+            vistas_total += len(vistas)
+            cotas = [v for v in getattr(p, "Views", []) if v.TypeId == "TechDraw::DrawViewDimension"]
+            cotas_total += len(cotas)
+            globos = [v for v in getattr(p, "Views", []) if v.TypeId == "TechDraw::DrawViewBalloon"]
+            globos_total += len(globos)
+
+        dr = next((h for h in hojas if h.Label == "Datos_Rotulo"), None)
+        if dr is None:
+            avisos.append("No se encontró la hoja central 'Datos_Rotulo' para actualización global")
+
+        tb = next((h for h in hojas if h.Label == "Tabla_BOM_IRAM"), None)
+        if tb is None:
+            avisos.append("No se encontró la hoja 'Tabla_BOM_IRAM'")
+
+        print(
+            f"INFO Legajo TechDraw: {len(paginas_td)} páginas, {vistas_total} vistas ortogonales/cortes, "
+            f"{cotas_total} cotas geométricas, {globos_total} globos de despiece"
+        )
+        return errores, avisos
 
     # --- MODO ENSAMBLAJE DE VÍNCULOS (App::Link o Assembly::AssemblyObject) ---
     if links:

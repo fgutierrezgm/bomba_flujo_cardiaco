@@ -23,13 +23,21 @@ import os
 import sys
 import FreeCAD as App
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "_herramientas"))
+AQUI = os.path.dirname(
+    os.path.abspath(
+        globals().get(
+            "__file__",
+            "proyectos/bomba_flujo_cardiaco/ensamblajes/generar_piloto_embolo_assembly.py",
+        )
+    )
+)
+sys.path.insert(0, os.path.join(AQUI, "..", "..", "..", "_herramientas"))
 from fc_helpers import MATERIALES_BASE
 
 import JointObject
 import UtilsAssembly
 
-DIR_PROYECTO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DIR_PROYECTO = os.path.abspath(os.path.join(AQUI, ".."))
 DIR_PIEZAS = os.path.join(DIR_PROYECTO, "piezas")
 RUTA_SALIDA = os.path.join(DIR_PROYECTO, "ensamblajes", "Piloto_Embolo_Assembly.FCStd")
 
@@ -470,6 +478,31 @@ def main():
             lnk_tensor, "LCS_Asiento_Estructura_1",
         )
 
+    # =========================================================================
+    # 8. ELEMENTOS COMERCIALES NORMALIZADOS (Bujes, O-Ring, Rodamiento, Retén, Pasadores)
+    # =========================================================================
+    lnk_buje_1, _ = asegurar_link(doc, asm, p("Buje_Guia_12x14x20.FCStd"), "Buje_Guia_1")
+    lnk_buje_2, _ = asegurar_link(doc, asm, p("Buje_Guia_12x14x20.FCStd"), "Buje_Guia_2")
+    asegurar_junta(doc, asm, jg, "Joint_Buje_Guia_1", "Fixed", lnk_embolo, "LCS_Guia_1", lnk_buje_1, "LCS_Origen")
+    asegurar_junta(doc, asm, jg, "Joint_Buje_Guia_2", "Fixed", lnk_embolo, "LCS_Guia_2", lnk_buje_2, "LCS_Origen")
+
+    lnk_oring_emb, _ = asegurar_link(doc, asm, p("ORing_Embolo_97x3_5.FCStd"), "ORing_Embolo")
+    asegurar_junta(doc, asm, jg, "Joint_ORing_Embolo", "Fixed", lnk_embolo, "LCS_Ranura_ORing", lnk_oring_emb, "LCS_Origen")
+
+    lnk_rod_6201, _ = asegurar_link(doc, asm, p("Rodamiento_SKF_6201.FCStd"), "Rodamiento_SKF_6201")
+    asegurar_junta(doc, asm, jg, "Joint_Rodamiento_6201", "Fixed", lnk_adap_rod, "LCS_Asiento_Rodamiento_6201", lnk_rod_6201, "LCS_Origen")
+
+    lnk_reten, _ = asegurar_link(doc, asm, p("Reten_14x30x7.FCStd"), "Reten_14x30x7")
+    asegurar_junta(doc, asm, jg, "Joint_Reten_14x30x7", "Fixed", lnk_sufr_int, "LCS_Asiento_Reten", lnk_reten, "LCS_Origen")
+
+    for idx_pas in (1, 2, 3):
+        lnk_pas, _ = asegurar_link(doc, asm, p("Pasador_Cilindrico_4x18.FCStd"), f"Pasador_Transm_{idx_pas}")
+        asegurar_junta(
+            doc, asm, jg, f"Joint_Pasador_Transm_{idx_pas}", "Fixed",
+            lnk_transm_2, f"LCS_Pasador_{idx_pas}",
+            lnk_pas, "LCS_Origen",
+        )
+
     # Ocultar los iconos de juntas en 3D para una vista limpia (el usuario puede activarlos en el árbol)
     for o in jg.Group:
         o.Visibility = False
@@ -547,6 +580,24 @@ def main():
         "pares_rosca_ajuste": [
             ["Embolo_Delrin_10", "Sensor_Piston_1_05b"],
             ["Embolo_Delrin_10", "Sensor_Piston_2_05b"],
+            ["Embolo_Delrin_10", "Buje_Guia_1"],
+            ["Embolo_Delrin_10", "Buje_Guia_2"],
+            ["Guia_1_08", "Buje_Guia_1"],
+            ["Guia_2_08", "Buje_Guia_2"],
+            ["Embolo_Delrin_10", "ORing_Embolo"],
+            ["Cilindro_09", "ORing_Embolo"],
+            ["Adaptador_Rodamiento_03", "Rodamiento_SKF_6201"],
+            ["Transmisor_2_02b", "Rodamiento_SKF_6201"],
+            ["Tapa_Sufridera_Int_05a", "Rodamiento_SKF_6201"],
+            ["Sufridera_Int_05b", "Reten_14x30x7"],
+            ["Transmisor_2_02b", "Reten_14x30x7"],
+            ["Tapa_Interior_16b", "Reten_14x30x7"],
+            ["Transmisor_1_02a", "Pasador_Transm_1"],
+            ["Transmisor_1_02a", "Pasador_Transm_2"],
+            ["Transmisor_2_02b", "Pasador_Transm_1"],
+            ["Transmisor_2_02b", "Pasador_Transm_2"],
+            ["Transmisor_2_02b", "Pasador_Transm_3"],
+            ["Tornillo_Sin_Fin_14", "Pasador_Transm_3"],
             ["Centro_Embolo_1_11", "Tornillo_Sin_Fin_14"],
             ["Centro_Embolo_2_12", "Tornillo_Sin_Fin_14"],
             ["Tornillo_Sin_Fin_14", "Transmisor_2_02b"],
@@ -620,5 +671,5 @@ def main():
     print("Guardado exitosamente:", RUTA_SALIDA)
 
 
-if __name__ == "__main__":
+if __name__ in ("__main__", "generar_piloto_embolo_assembly"):
     main()
