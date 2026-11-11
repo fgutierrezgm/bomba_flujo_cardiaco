@@ -3,96 +3,96 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 
-def sanear_juntas_assembly(doc):
-    """
-    Sanea automáticamente los ViewProviders de juntas de Assembly::AssemblyObject
-    si el documento fue generado en modo headless (freecadcmd), evitando errores
-    de 'int object has no attribute redrawJointPlacements' en la GUI.
-    """
-    if not App.GuiUp or not doc:
-        return
-    try:
-        import JointObject
-        for o in getattr(doc, "Objects", []):
-            if o.isDerivedFrom("App::FeaturePython") and getattr(o, "ViewObject", None):
-                vo = o.ViewObject
-                proxy = getattr(vo, "Proxy", None)
-                if hasattr(o, "JointType"):
-                    if not isinstance(proxy, JointObject.ViewProviderJoint) or not hasattr(proxy, "app_obj"):
-                        vp = JointObject.ViewProviderJoint(vo)
-                        vp.app_obj = o
-                        vp.attach(vo)
-                elif hasattr(o, "ObjectToGround"):
-                    if not isinstance(proxy, JointObject.ViewProviderGroundedJoint) or not hasattr(proxy, "app_obj"):
-                        vp = JointObject.ViewProviderGroundedJoint(vo)
-                        vp.app_obj = o
-                        vp.attach(vo)
-    except Exception:
-        pass
-
-
-def sincronizar_modo_diseno_global(doc):
-    """
-    Sincroniza el parámetro 'modo_diseno_global' de la hoja 'Parametros_Generales'
-    del ensamblaje hacia la celda 'modo_diseno' (B2) de todas las piezas vinculadas.
-    """
-    if not doc or not hasattr(doc, "getObject"):
-        return
-    pg = doc.getObject("Parametros_Generales")
-    if not pg:
-        return
-    try:
-        val_raw = pg.get("modo_diseno_global")
-        if val_raw is None:
-            return
-        modo_global = int(float(str(val_raw).strip()))
-    except Exception:
-        return
-
-    docs_hijos = set()
-    for o in getattr(doc, "Objects", []):
-        if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None):
-            lo = o.LinkedObject
-            dh = getattr(lo, "Document", None)
-            if dh and dh != doc:
-                docs_hijos.add(dh)
-
-    actualizado = False
-    for dh in docs_hijos:
-        sp = dh.getObject("Parametros")
-        if sp and hasattr(sp, "getAlias") and sp.getAlias("B2") == "modo_diseno":
-            try:
-                cur_val = int(float(str(sp.get("B2")).strip()))
-            except Exception:
-                cur_val = None
-            if cur_val != modo_global:
-                sp.set("B2", str(modo_global))
-                dh.recompute()
-                actualizado = True
-
-    if actualizado:
-        doc.recompute()
-        App.Console.PrintMessage(
-            f"[ModoDiseno] Sincronizado modo_diseno = {modo_global} en {len(docs_hijos)} piezas vinculadas.\n"
-        )
-
-
 class MaterialSyncObserver:
     def __init__(self):
         self._in_sync = False
 
+    @staticmethod
+    def sanear_juntas_assembly(doc):
+        """
+        Sanea automáticamente los ViewProviders de juntas de Assembly::AssemblyObject
+        si el documento fue generado en modo headless (freecadcmd), evitando errores
+        de 'int object has no attribute redrawJointPlacements' en la GUI.
+        """
+        if not App.GuiUp or not doc:
+            return
+        try:
+            import JointObject
+            for o in getattr(doc, "Objects", []):
+                if o.isDerivedFrom("App::FeaturePython") and getattr(o, "ViewObject", None):
+                    vo = o.ViewObject
+                    proxy = getattr(vo, "Proxy", None)
+                    if hasattr(o, "JointType"):
+                        if not isinstance(proxy, JointObject.ViewProviderJoint) or not hasattr(proxy, "app_obj"):
+                            vp = JointObject.ViewProviderJoint(vo)
+                            vp.app_obj = o
+                            vp.attach(vo)
+                    elif hasattr(o, "ObjectToGround"):
+                        if not isinstance(proxy, JointObject.ViewProviderGroundedJoint) or not hasattr(proxy, "app_obj"):
+                            vp = JointObject.ViewProviderGroundedJoint(vo)
+                            vp.app_obj = o
+                            vp.attach(vo)
+        except Exception:
+            pass
+
+    @staticmethod
+    def sincronizar_modo_diseno_global(doc):
+        """
+        Sincroniza el parámetro 'modo_diseno_global' de la hoja 'Parametros_Generales'
+        del ensamblaje hacia la celda 'modo_diseno' (B2) de todas las piezas vinculadas.
+        """
+        if not doc or not hasattr(doc, "getObject"):
+            return
+        pg = doc.getObject("Parametros_Generales")
+        if not pg:
+            return
+        try:
+            val_raw = pg.get("modo_diseno_global")
+            if val_raw is None:
+                return
+            modo_global = int(float(str(val_raw).strip()))
+        except Exception:
+            return
+
+        docs_hijos = set()
+        for o in getattr(doc, "Objects", []):
+            if o.TypeId == "App::Link" and getattr(o, "LinkedObject", None):
+                lo = o.LinkedObject
+                dh = getattr(lo, "Document", None)
+                if dh and dh != doc:
+                    docs_hijos.add(dh)
+
+        actualizado = False
+        for dh in docs_hijos:
+            sp = dh.getObject("Parametros")
+            if sp and hasattr(sp, "getAlias") and sp.getAlias("B2") == "modo_diseno":
+                try:
+                    cur_val = int(float(str(sp.get("B2")).strip()))
+                except Exception:
+                    cur_val = None
+                if cur_val != modo_global:
+                    sp.set("B2", str(modo_global))
+                    dh.recompute()
+                    actualizado = True
+
+        if actualizado:
+            doc.recompute()
+            App.Console.PrintMessage(
+                f"[ModoDiseno] Sincronizado modo_diseno = {modo_global} en {len(docs_hijos)} piezas vinculadas.\n"
+            )
+
     def slotActivatedDocument(self, doc):
-        sanear_juntas_assembly(doc)
-        sincronizar_modo_diseno_global(doc)
+        self.sanear_juntas_assembly(doc)
+        self.sincronizar_modo_diseno_global(doc)
 
     def slotCreatedDocument(self, doc):
-        sanear_juntas_assembly(doc)
+        self.sanear_juntas_assembly(doc)
 
     def slotChangedObject(self, obj, prop):
         if self._in_sync or not obj:
             return
         if obj.Name == "Parametros_Generales":
-            sincronizar_modo_diseno_global(obj.Document)
+            self.sincronizar_modo_diseno_global(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
             self.sync_document(obj.Document)
 
@@ -100,13 +100,13 @@ class MaterialSyncObserver:
         if self._in_sync or not obj:
             return
         if obj.Name == "Parametros_Generales":
-            sincronizar_modo_diseno_global(obj.Document)
+            self.sincronizar_modo_diseno_global(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
             self.sync_document(obj.Document)
 
     def slotFinishRecomputeDocument(self, doc):
-        sanear_juntas_assembly(doc)
-        sincronizar_modo_diseno_global(doc)
+        self.sanear_juntas_assembly(doc)
+        self.sincronizar_modo_diseno_global(doc)
         if self._in_sync or not doc:
             return
         if doc.getObject("Materiales_Generales") or doc.getObject("Materiales"):
