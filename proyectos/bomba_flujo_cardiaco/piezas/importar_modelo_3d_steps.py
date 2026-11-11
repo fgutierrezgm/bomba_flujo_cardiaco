@@ -22,6 +22,7 @@ Ejecución:
   /snap/bin/freecad.cmd proyectos/bomba_flujo_cardiaco/piezas/importar_modelo_3d_steps.py
 """
 import os
+import shutil
 import sys
 import FreeCAD as App
 import Part
@@ -34,6 +35,8 @@ sys.path.insert(0, os.path.join(RAIZ, "_herramientas"))
 from fc_helpers import Pieza
 
 DIR_ENTRADAS = os.path.join(os.path.dirname(AQUI), "entradas", "impresion_3d")
+DIR_CATALOGO = os.path.join(RAIZ, "02_Catalogos_SKF_DIN_ISO")
+DIR_ELEM_COM = os.path.join(AQUI, "Elementos_comericales")
 
 # Catálogo de los 20 archivos STEP exportados desde Inventor
 # (archivo_stp, nombre_fcstd, material, eje_origen, descripcion)
@@ -108,6 +111,15 @@ def importar_steps():
         print(f"Importado STEP -> {nombre}.FCStd ({bb.XLength:.1f}x{bb.YLength:.1f}x{bb.ZLength:.1f} mm, Vol={sh_norm.Volume:.1f} mm3)")
 
 
+def _guardar_comercial(pz, sol, categoria, nombre):
+    os.makedirs(os.path.join(DIR_CATALOGO, categoria), exist_ok=True)
+    os.makedirs(DIR_ELEM_COM, exist_ok=True)
+    ruta_cat = os.path.join(DIR_CATALOGO, categoria, f"{nombre}.FCStd")
+    ruta_loc = os.path.join(DIR_ELEM_COM, f"{nombre}.FCStd")
+    pz.cerrar(sol, ruta_cat)
+    shutil.copy2(ruta_cat, ruta_loc)
+
+
 def generar_comerciales_y_cilindro():
     # 1. Cilindro Acrílico 3D (Ø83 x Ø76 x 188.75 mm) adaptado a Tapa_Exterior/Interior
     pz = Pieza("Cilindro_09_3D")
@@ -141,7 +153,7 @@ def generar_comerciales_y_cilindro():
     pz.lcs("LCS_Origen")
     pz.lcs("LCS_Cara_Sup", z=p("ancho"))
     pz.reporte_fisico(sol)
-    pz.cerrar(sol, os.path.join(AQUI, "Rodamiento_SKF_609.FCStd"))
+    _guardar_comercial(pz, sol, "Rodamientos", "Rodamiento_SKF_609")
 
     # 3. Retén DIN 3760 A 10x22x7 mm
     pz = Pieza("Reten_10x22x7")
@@ -158,7 +170,7 @@ def generar_comerciales_y_cilindro():
     pz.lcs("LCS_Origen")
     pz.lcs("LCS_Cara_Sup", z=p("ancho"))
     pz.reporte_fisico(sol)
-    pz.cerrar(sol, os.path.join(AQUI, "Reten_10x22x7.FCStd"))
+    _guardar_comercial(pz, sol, "Retenes_DIN_3760", "Reten_10x22x7")
 
     # 4. O-Rings DIN 3771 (75x3.55, 69x3.55, 11.2x1.8)
     for nom, d_i, s_c in [
@@ -177,7 +189,7 @@ def generar_comerciales_y_cilindro():
         toro.setExpression("Radius2", f"{pz.p('s_cuerda')} / 2")
         pz.lcs("LCS_Origen")
         pz.reporte_fisico(toro)
-        pz.cerrar(toro, os.path.join(AQUI, f"{nom}.FCStd"))
+        _guardar_comercial(pz, toro, "ORings_DIN_3771_ISO_3601", nom)
 
     # 5. Pasadores elásticos ISO 8752 (3x14 y 3x10)
     for nom, l_p in [("Pasador_3x14", 14.0), ("Pasador_3x10", 10.0)]:
@@ -194,7 +206,7 @@ def generar_comerciales_y_cilindro():
         sol = pz.corte(f"{nom}_Solido", c1, c2)
         pz.lcs("LCS_Origen")
         pz.reporte_fisico(sol)
-        pz.cerrar(sol, os.path.join(AQUI, f"{nom}.FCStd"))
+        _guardar_comercial(pz, sol, "Pasadores_ISO_8752", nom)
 
 
 if __name__ in ("__main__", "importar_modelo_3d_steps"):
