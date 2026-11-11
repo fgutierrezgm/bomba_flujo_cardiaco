@@ -511,12 +511,14 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
 def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
     """
     Genera el símbolo SVG vectorial de la Lista de Materiales (BOM) según IRAM 4508,
-    coincidiendo exactamente con la numeración 1..26 de los globos de la vista explotada.
+    coincidiendo exactamente con la numeración 1..27 de los globos de la vista explotada,
+    e incluyendo fila destacada de Peso Total del Ensamblaje.
     """
     alto_fila = 5.4
     n_items = len(items_bom)
     alto_cabecera = 12.0
-    alto_tabla = alto_cabecera + n_items * alto_fila
+    alto_fila_total = 6.8
+    alto_tabla = alto_cabecera + n_items * alto_fila + alto_fila_total
     alto_bul = 10.0 + len(resumen_buloneria) * 4.5 if resumen_buloneria else 0.0
     H = alto_tabla + alto_bul + 4.0
     W = ancho_mm
@@ -535,7 +537,7 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
 
     for cx in cols_x:
         svg.append(
-            f'<line x1="{cx:.1f}" y1="6.8" x2="{cx:.1f}" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.35"/>'
+            f'<line x1="{cx:.1f}" y1="6.8" x2="{cx:.1f}" y2="{alto_tabla - alto_fila_total:.1f}" stroke="#000000" stroke-width="0.35"/>'
         )
 
     encabezados = [
@@ -552,9 +554,16 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
             f'<text x="{cx:.1f}" y="10.6" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6" font-weight="bold" text-anchor="middle">{_escapar_xml(titulo)}</text>'
         )
 
+    cant_total_piezas = 0
+    masa_total_piezas_g = 0.0
+
     for idx, it in enumerate(items_bom):
         y_top = alto_cabecera + idx * alto_fila
         y_txt = y_top + 3.8
+        cant_total_piezas += it["cantidad"]
+        masa_sub = it["masa_g"] * it["cantidad"]
+        masa_total_piezas_g += masa_sub
+
         es_comercial = it.get("es_comercial", False)
         bg = "#f7fbff" if es_comercial else ("#ffffff" if idx % 2 == 0 else "#f9f9f9")
         svg.append(
@@ -590,10 +599,38 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
             f'<text x="381.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6" text-anchor="end">{it["masa_g"]:.1f}</text>'
         )
 
+    # --- FILA DESTACADA DE PESO TOTAL DEL ENSAMBLAJE ---
+    y_tot = alto_cabecera + n_items * alto_fila
+    masa_total_kg = masa_total_piezas_g / 1000.0
+    svg.append(
+        f'<rect x="0.8" y="{y_tot:.2f}" width="{W - 1.6:.1f}" height="{alto_fila_total:.2f}" fill="#e3ecf6" stroke="none"/>'
+    )
+    svg.append(
+        f'<line x1="0.5" y1="{y_tot:.2f}" x2="{W - 0.5:.1f}" y2="{y_tot:.2f}" stroke="#000000" stroke-width="0.55"/>'
+    )
+    svg.append(
+        f'<line x1="16.0" y1="{y_tot:.2f}" x2="16.0" y2="{y_tot + alto_fila_total:.2f}" stroke="#000000" stroke-width="0.35"/>'
+    )
+    svg.append(
+        f'<line x1="34.0" y1="{y_tot:.2f}" x2="34.0" y2="{y_tot + alto_fila_total:.2f}" stroke="#000000" stroke-width="0.35"/>'
+    )
+    svg.append(
+        f'<line x1="345.0" y1="{y_tot:.2f}" x2="345.0" y2="{y_tot + alto_fila_total:.2f}" stroke="#000000" stroke-width="0.35"/>'
+    )
+    svg.append(
+        f'<text x="25.0" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.0" font-weight="bold" text-anchor="middle">{cant_total_piezas}</text>'
+    )
+    svg.append(
+        f'<text x="38.0" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.1" font-weight="bold">PESO TOTAL ESTIMADO DEL CONJUNTO MECÁNICO (BOMBA ARMADA COMPLETA)</text>'
+    )
+    svg.append(
+        f'<text x="381.5" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.2" font-weight="bold" text-anchor="end">{masa_total_kg:.2f} kg ({masa_total_piezas_g:.0f} g)</text>'
+    )
+
     if resumen_buloneria:
         yb0 = alto_tabla + 3.0
         svg.append(
-            f'<rect x="0.5" y="{yb0:.2f}" width="205.0" height="{alto_bul - 1.5:.2f}" fill="#fffdf7" stroke="#000000" stroke-width="0.45"/>'
+            f'<rect x="0.5" y="{yb0:.2f}" width="265.0" height="{alto_bul - 1.5:.2f}" fill="#fffdf7" stroke="#000000" stroke-width="0.45"/>'
         )
         svg.append(
             f'<text x="3.0" y="{yb0 + 4.5:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.7" font-weight="bold">ELEMENTOS DE FIJACIÓN ESTÁNDAR (BULONERÍA IRAM / DIN / ISO - NO NUMERADOS EN EXPLOTADA):</text>'

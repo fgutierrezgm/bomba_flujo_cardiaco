@@ -692,6 +692,38 @@ def crear_hoja_tabla_bom_iram(doc, items_bom):
     return tb, masa_total_conjunto
 
 
+def generar_svg_recuadro_subensamblaje(titulo, subtexto, ancho_mm, alto_mm):
+    """Genera un marco técnico SVG con cabecera destacada para delimitar subensamblajes."""
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{ancho_mm:.1f}mm" height="{alto_mm:.1f}mm" viewBox="0 0 {ancho_mm:.1f} {alto_mm:.1f}">
+  <rect x="0.5" y="0.5" width="{ancho_mm - 1.0:.1f}" height="{alto_mm - 1.0:.1f}" fill="#fafcff" stroke="#254a6e" stroke-width="0.50" stroke-dasharray="5,2" rx="2"/>
+  <rect x="0.5" y="0.5" width="{ancho_mm - 1.0:.1f}" height="7.8" fill="#e8f0fe" stroke="#254a6e" stroke-width="0.50" rx="2"/>
+  <text x="4.5" y="5.3" font-family="Liberation Sans, Arial, sans-serif" font-size="2.9" font-weight="bold" fill="#17324d">{titulo}</text>
+  <text x="{ancho_mm - 4.5:.1f}" y="5.3" font-family="Liberation Sans, Arial, sans-serif" font-size="2.5" font-weight="bold" fill="#254a6e" text-anchor="end">{subtexto}</text>
+</svg>"""
+
+
+def agregar_globo_item(doc, page, vista, it_num, pt3d, pt_centro_comp, escala, dx, dy, prefijo):
+    """
+    Coloca un globo de despiece IRAM (TechDraw::DrawViewBalloon) con origen en la posición 2D
+    exacta de la pieza y etiqueta desplazada (dx, dy).
+    """
+    u_hat = App.Vector(1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0), 0.0)
+    v_hat = App.Vector(-1.0 / math.sqrt(6.0), 1.0 / math.sqrt(6.0), 2.0 / math.sqrt(6.0))
+    ox = (pt3d.dot(u_hat) - pt_centro_comp.dot(u_hat)) * escala
+    oy = (pt3d.dot(v_hat) - pt_centro_comp.dot(v_hat)) * escala
+    globo = doc.addObject("TechDraw::DrawViewBalloon", f"Globo_{prefijo}_{it_num:02d}")
+    page.addView(globo)
+    globo.SourceView = vista
+    globo.BubbleShape = "Circular"
+    globo.EndType = "Filled arrow"
+    globo.Text = str(it_num)
+    globo.OriginX = ox
+    globo.OriginY = oy
+    globo.X = ox + dx
+    globo.Y = oy + dy
+    return globo
+
+
 def _crear_pagina_iram(doc, nombre_obj, etiqueta, formato, rutas_plantillas, textos_rotulo):
     page = doc.addObject("TechDraw::DrawPage", nombre_obj)
     page.Label = etiqueta
@@ -858,44 +890,15 @@ def main():
     estilizar_vista_iram(v_arm_iso, mostrar_ocultas=False, mostrar_centros=False)
 
     # =========================================================================
-    # HOJA 2: PLANO 00b - VISTA EXPLOTADA ISOMÉTRICA CON GLOBOS IRAM 1..27 (A2)
+    # HOJA 2: PLANO 00b - VISTA EXPLOTADA REORGANIZADA POR SUBENSAMBLAJES (IRAM A2)
     # =========================================================================
-    shapes_explotadas = []
-    puntos_anclaje_3d = {}  # item_num -> App.Vector (centroide 3D explotado de la instancia representativa)
-
-    for entrada in CATALOGO_ITEMS_BOM:
-        it_num = entrada["item"]
-        sh_base = datos_piezas[it_num]["shape"]
-        vx, vy, vz = entrada["vec_exp"]
-        vec_desp = App.Vector(vx, vy, vz)
-        inst_ref = entrada["instancia_ref"]
-
-        for idx_inst, inst_name in enumerate(entrada["instancias"]):
-            plc_base = placements_instancias.get(inst_name)
-            if plc_base is None or sh_base.isNull():
-                continue
-            sh_i = sh_base.copy()
-            sh_i.Placement = plc_base.multiply(sh_i.Placement)
-            # Desplazar según el vector de explosión de su grupo funcional
-            sh_i.translate(vec_desp)
-            shapes_explotadas.append(sh_i)
-            if inst_name == inst_ref or it_num not in puntos_anclaje_3d:
-                puntos_anclaje_3d[it_num] = sh_i.BoundBox.Center
-
-    comp_explotado = Part.makeCompound(shapes_explotadas)
-    obj_explotado = doc_planos.addObject("Part::Feature", "Conjunto_Explotado_Solido")
-    obj_explotado.Shape = comp_explotado
-    if getattr(obj_explotado, "ViewObject", None):
-        obj_explotado.ViewObject.Visibility = False
-    grupo_fuentes.addObject(obj_explotado)
-
     rotulo_00b = dict(campos_base_rotulo)
     rotulo_00b.update(
         {
-            "ESCALA": "1:2.5",
+            "ESCALA": "Indicada",
             "FORMATO": "IRAM A2",
             "HOJA": f"2/{total_hojas}",
-            "TITULO": "Vista Explotada y Numeración de Despiece (Ítems 1 a 27)",
+            "TITULO": "Vista Explotada General y Despiece por Subensamblajes (Ítems 1 a 27)",
             "MATERIAL": "Ver Plano Nº 0c (BOM)",
             "MASA": f"Masa: {masa_total_g / 1000.0:.2f} kg",
             "NUM_PLANO": "Plano Nº 0b",
@@ -910,66 +913,326 @@ def main():
         rotulo_00b,
     )
 
-    escala_exp = 0.38
-    v_exp_iso = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Explotada_Iso")
-    page_00b.addView(v_exp_iso)
-    v_exp_iso.Source = [obj_explotado]
-    v_exp_iso.Direction = App.Vector(1, -1, 1)
-    v_exp_iso.XDirection = App.Vector(1, 1, 0)
-    v_exp_iso.ScaleType = "Custom"
-    v_exp_iso.Scale = escala_exp
-    v_exp_iso.X = 295.0
-    v_exp_iso.Y = 225.0
-    v_exp_iso.Caption = "Vista Isométrica Explotada con Globos IRAM 4508 (N° Ítem coincide con Lista de Materiales)"
-    estilizar_vista_iram(v_exp_iso, mostrar_ocultas=False, mostrar_centros=False)
+    # -------------------------------------------------------------------------
+    # 2.1 COMPUESTO Y VISTA EXPLOTADA GENERAL DE LA MÁQUINA (SECTOR SUPERIOR)
+    # Explosión axial pura y separación radial de columnas/tensores
+    # -------------------------------------------------------------------------
+    shapes_exp_gen = []
+    puntos_gen_3d = {}
 
-    # Proyección analítica 3D -> 2D de la vista isométrica para posicionar los 27 globos en sentido horario
-    u_hat = App.Vector(1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0), 0.0)
-    v_hat = App.Vector(-1.0 / math.sqrt(6.0), 1.0 / math.sqrt(6.0), 2.0 / math.sqrt(6.0))
+    desplazamientos_gen = {
+        # Frontal (-Z)
+        "Tapa_Exterior_16a": App.Vector(0, 0, -480),
+        "Sensor_Inductivo_Ext": App.Vector(-75, -75, -480),
+        "Anillo_Torica_Ext_13": App.Vector(0, 0, -380),
+        "Cilindro_09": App.Vector(0, 0, -270),
+        # Piston group in general view
+        "Embolo_Delrin_10": App.Vector(0, 0, -130),
+        "ORing_Embolo": App.Vector(0, 0, -130),
+        "Centro_Embolo_1_11": App.Vector(0, 0, -130),
+        "Centro_Embolo_2_12": App.Vector(0, 0, -130),
+        "Sensor_Piston_1_05b": App.Vector(0, 0, -130),
+        "Sensor_Piston_2_05b": App.Vector(0, 0, -130),
+        "Buje_Guia_1": App.Vector(0, 0, -130),
+        "Buje_Guia_2": App.Vector(0, 0, -130),
+        # Central stator
+        "Anillo_Torica_Int_13": App.Vector(0, 0, -50),
+        "Tapa_Interior_16b": App.Vector(0, 0, 0),
+        "Sensor_Inductivo_Int": App.Vector(-75, 75, 0),
+        # Guías
+        "Sufridera_Guia_1_05b": App.Vector(0, 0, 70),
+        "Sufridera_Guia_2_05b": App.Vector(0, 0, 70),
+        "Guia_1_08": App.Vector(0, 0, 140),
+        "Guia_2_08": App.Vector(0, 0, 140),
+        # Transmission group in general view
+        "Reten_14x30x7": App.Vector(0, 0, 50),
+        "Sufridera_Int_05b": App.Vector(0, 0, 85),
+        "Tapa_Sufridera_Int_05a": App.Vector(0, 0, 120),
+        "Transmisor_1_02a": App.Vector(0, 0, 160),
+        "Transmisor_2_02b": App.Vector(0, 0, 240),
+        "Pasador_Transm_1": App.Vector(0, 0, 240),
+        "Pasador_Transm_2": App.Vector(0, 0, 240),
+        "Pasador_Transm_3": App.Vector(0, 0, 240),
+        "Adaptador_Rodamiento_03": App.Vector(0, 0, 310),
+        "Rodamiento_SKF_6201": App.Vector(0, 0, 350),
+        "Sufridera_Eje_Ext_05a": App.Vector(0, 0, 390),
+        "Adaptador_Eje_04": App.Vector(0, 0, 430),
+        "Tornillo_Sin_Fin_14": App.Vector(0, 0, 500),
+        # Estructura exterior (separación radial)
+        "Estructura_Interior_1_07": App.Vector(0, -160, 0),
+        "Cierre_Estructura_1_15": App.Vector(0, -220, 0),
+        "Estructura_Interior_2_07": App.Vector(0, 160, 0),
+        "Cierre_Estructura_2_15": App.Vector(0, 220, 0),
+        # 4 Tensores (desplazados radialmente hacia los 4 vértices)
+        "Tensor_1_06": App.Vector(85, 85, 0),
+        "Tensor_2_06": App.Vector(-85, 85, 0),
+        "Tensor_3_06": App.Vector(-85, -85, 0),
+        "Tensor_4_06": App.Vector(85, -85, 0),
+    }
 
-    # Calcular el centroide proyectado (u_mid, v_mid) de la caja envolvente proyectada del compuesto explotado
-    verts_exp = comp_explotado.Vertexes
-    if verts_exp:
-        us = [vt.Point.dot(u_hat) for vt in verts_exp]
-        vs = [vt.Point.dot(v_hat) for vt in verts_exp]
-        u_mid = 0.5 * (min(us) + max(us))
-        v_mid = 0.5 * (min(vs) + max(vs))
-    else:
-        u_mid, v_mid = 0.0, 0.0
+    for entrada in CATALOGO_ITEMS_BOM:
+        it_num = entrada["item"]
+        sh_base = datos_piezas[it_num]["shape"]
+        inst_ref = entrada["instancia_ref"]
 
-    proyecciones_items = []
-    for it_num, pt3d in puntos_anclaje_3d.items():
-        ox = (pt3d.dot(u_hat) - u_mid) * escala_exp
-        oy = (pt3d.dot(v_hat) - v_mid) * escala_exp
-        # Ángulo en sentido horario comenzando desde arriba (12 en punto = +Y)
-        ang_cw = (math.degrees(math.atan2(ox, oy)) + 360.0) % 360.0
-        proyecciones_items.append((ang_cw, it_num, ox, oy))
+        for inst_name in entrada["instancias"]:
+            plc_base = placements_instancias.get(inst_name)
+            if plc_base is None or sh_base.isNull():
+                continue
+            sh_i = sh_base.copy()
+            sh_i.Placement = plc_base.multiply(sh_i.Placement)
+            v_desp = desplazamientos_gen.get(inst_name, App.Vector(0, 0, 0))
+            sh_i.translate(v_desp)
+            shapes_exp_gen.append(sh_i)
+            if inst_name == inst_ref or it_num not in puntos_gen_3d:
+                puntos_gen_3d[it_num] = sh_i.BoundBox.Center
 
-    # Ordenar angularmente en sentido horario alrededor del conjunto explotado
-    proyecciones_items.sort(key=lambda x: x[0])
-    n_globos = len(proyecciones_items)
-    rx_elipse = 195.0
-    ry_elipse = 132.0
+    comp_exp_gen = Part.makeCompound(shapes_exp_gen)
+    obj_exp_gen = doc_planos.addObject("Part::Feature", "Conjunto_Explotado_General")
+    obj_exp_gen.Shape = comp_exp_gen
+    if getattr(obj_exp_gen, "ViewObject", None):
+        obj_exp_gen.ViewObject.Visibility = False
+    grupo_fuentes.addObject(obj_exp_gen)
 
-    for idx_cw, (_, it_num, ox, oy) in enumerate(proyecciones_items):
-        # Distribuir uniformemente en el perímetro elíptico en sentido horario para evitar cruces de líneas guía
-        theta_cw = math.radians(idx_cw * (360.0 / n_globos))
-        bx = rx_elipse * math.sin(theta_cw)
-        by = ry_elipse * math.cos(theta_cw)
-        # Evitar la esquina inferior derecha donde se ubica el rótulo IRAM
-        if bx > 75.0 and by < -85.0:
-            by = -82.0
+    escala_exp_gen = 0.25
+    v_exp_gen = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Explotada_General")
+    page_00b.addView(v_exp_gen)
+    v_exp_gen.Source = [obj_exp_gen]
+    v_exp_gen.Direction = App.Vector(1, -1, 1)
+    v_exp_gen.XDirection = App.Vector(1, 1, 0)
+    v_exp_gen.ScaleType = "Custom"
+    v_exp_gen.Scale = escala_exp_gen
+    v_exp_gen.X = 295.0
+    v_exp_gen.Y = 295.0
+    v_exp_gen.Caption = "VISTA EXPLOTADA GENERAL DE LA MÁQUINA (Secuencia Longitudinal de Montaje)"
+    estilizar_vista_iram(v_exp_gen, mostrar_ocultas=False, mostrar_centros=False)
 
-        globo = doc_planos.addObject("TechDraw::DrawViewBalloon", f"Globo_Item_{it_num:02d}")
-        page_00b.addView(globo)
-        globo.SourceView = v_exp_iso
-        globo.BubbleShape = "Circular"
-        globo.EndType = "Filled arrow"
-        globo.Text = str(it_num)
-        globo.OriginX = ox
-        globo.OriginY = oy
-        globo.X = bx
-        globo.Y = by
+    centro_gen = comp_exp_gen.BoundBox.Center
+    globos_general = [
+        (1, -38.0, -35.0),
+        (2, -26.0, 36.0),
+        (3, -15.0, 36.0),
+        (6, 22.0, 32.0),
+        (11, 28.0, 36.0),
+        (14, 45.0, 24.0),
+        (18, -32.0, -36.0),
+        (19, -36.0, 32.0),
+        (20, -36.0, -35.0),
+        (21, 36.0, -36.0),
+        (27, -35.0, 24.0),
+    ]
+    for it_num, dx, dy in globos_general:
+        pt3d = puntos_gen_3d.get(it_num)
+        if pt3d is not None:
+            agregar_globo_item(
+                doc_planos, page_00b, v_exp_gen, it_num, pt3d, centro_gen, escala_exp_gen, dx, dy, "Gen"
+            )
+
+    # -------------------------------------------------------------------------
+    # 2.2 SUBENSAMBLAJE I: CONJUNTO DEL ÉMBOLO Y SELLADO (SECTOR INFERIOR IZQ.)
+    # Escala ampliada 1:1.3 con O-Ring, bujes, contratapa y targets magnéticos
+    # -------------------------------------------------------------------------
+    simb_sub1 = doc_planos.addObject("TechDraw::DrawViewSymbol", "Recuadro_Sub_Embolo")
+    page_00b.addView(simb_sub1)
+    simb_sub1.Symbol = generar_svg_recuadro_subensamblaje(
+        "DETALLE A: SUBENSAMBLAJE DEL ÉMBOLO Y SELLADO", "ESCALA 1:1.3", 215.0, 160.0
+    )
+    simb_sub1.X = 138.0
+    simb_sub1.Y = 105.0
+
+    shapes_sub_emb = []
+    puntos_sub_emb = {}
+
+    sh_emb = datos_piezas[7]["shape"].copy()
+    shapes_sub_emb.append(sh_emb)
+    puntos_sub_emb[7] = sh_emb.BoundBox.Center
+
+    sh_oring = datos_piezas[25]["shape"].copy()
+    sh_oring.translate(App.Vector(0, 0, -35))
+    shapes_sub_emb.append(sh_oring)
+    puntos_sub_emb[25] = sh_oring.BoundBox.Center
+
+    sh_ce1 = datos_piezas[8]["shape"].copy()
+    sh_ce1.translate(App.Vector(0, 0, -80))
+    shapes_sub_emb.append(sh_ce1)
+    puntos_sub_emb[8] = sh_ce1.BoundBox.Center
+
+    sh_t1 = datos_piezas[10]["shape"].copy()
+    sh_t1.translate(App.Vector(0, 35, -125))
+    shapes_sub_emb.append(sh_t1)
+    puntos_sub_emb[10] = sh_t1.BoundBox.Center
+
+    sh_ce2 = datos_piezas[9]["shape"].copy()
+    sh_ce2.translate(App.Vector(0, 0, 50))
+    shapes_sub_emb.append(sh_ce2)
+    puntos_sub_emb[9] = sh_ce2.BoundBox.Center
+
+    sh_t2 = datos_piezas[10]["shape"].copy()
+    sh_t2.translate(App.Vector(0, -35, 95))
+    shapes_sub_emb.append(sh_t2)
+
+    sh_b1 = datos_piezas[24]["shape"].copy()
+    sh_b1.translate(App.Vector(-35, 0, 60))
+    shapes_sub_emb.append(sh_b1)
+    puntos_sub_emb[24] = sh_b1.BoundBox.Center
+
+    sh_b2 = datos_piezas[24]["shape"].copy()
+    sh_b2.translate(App.Vector(35, 0, 60))
+    shapes_sub_emb.append(sh_b2)
+
+    comp_sub_emb = Part.makeCompound(shapes_sub_emb)
+    obj_sub_emb = doc_planos.addObject("Part::Feature", "Subensamblaje_Embolo_Solido")
+    obj_sub_emb.Shape = comp_sub_emb
+    if getattr(obj_sub_emb, "ViewObject", None):
+        obj_sub_emb.ViewObject.Visibility = False
+    grupo_fuentes.addObject(obj_sub_emb)
+
+    escala_sub_emb = 0.75
+    v_sub_emb = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Sub_Embolo")
+    page_00b.addView(v_sub_emb)
+    v_sub_emb.Source = [obj_sub_emb]
+    v_sub_emb.Direction = App.Vector(1, -1, 1)
+    v_sub_emb.XDirection = App.Vector(1, 1, 0)
+    v_sub_emb.ScaleType = "Custom"
+    v_sub_emb.Scale = escala_sub_emb
+    v_sub_emb.X = 138.0
+    v_sub_emb.Y = 100.0
+    v_sub_emb.Caption = "Subensamblaje del Émbolo (Despiece Explícito)"
+    estilizar_vista_iram(v_sub_emb, mostrar_ocultas=False, mostrar_centros=False)
+
+    centro_sub_emb = comp_sub_emb.BoundBox.Center
+    globos_sub_emb = [
+        (7, 0.0, -35.0),
+        (25, -34.0, -22.0),
+        (8, -34.0, -28.0),
+        (10, -34.0, 24.0),
+        (9, 32.0, 28.0),
+        (24, 34.0, -26.0),
+    ]
+    for it_num, dx, dy in globos_sub_emb:
+        pt3d = puntos_sub_emb.get(it_num)
+        if pt3d is not None:
+            agregar_globo_item(
+                doc_planos, page_00b, v_sub_emb, it_num, pt3d, centro_sub_emb, escala_sub_emb, dx, dy, "Emb"
+            )
+
+    # -------------------------------------------------------------------------
+    # 2.3 SUBENSAMBLAJE II: TRANSMISIÓN Y SELLADO DE EJE (SECTOR INFERIOR DER.)
+    # Escala ampliada 1:1.8 con rodamientos, retenes, sufrideras y pasadores
+    # -------------------------------------------------------------------------
+    simb_sub2 = doc_planos.addObject("TechDraw::DrawViewSymbol", "Recuadro_Sub_Transmision")
+    page_00b.addView(simb_sub2)
+    simb_sub2.Symbol = generar_svg_recuadro_subensamblaje(
+        "DETALLE B: SISTEMA DE TRANSMISIÓN Y SELLADO", "ESCALA 1:1.8", 245.0, 160.0
+    )
+    simb_sub2.X = 375.0
+    simb_sub2.Y = 105.0
+
+    shapes_sub_transm = []
+    puntos_sub_transm = {}
+
+    sh_transm2 = datos_piezas[13]["shape"].copy()
+    shapes_sub_transm.append(sh_transm2)
+    puntos_sub_transm[13] = sh_transm2.BoundBox.Center
+
+    sh_transm1 = datos_piezas[12]["shape"].copy()
+    sh_transm1.translate(App.Vector(0, 0, -135))
+    shapes_sub_transm.append(sh_transm1)
+    puntos_sub_transm[12] = sh_transm1.BoundBox.Center
+
+    sh_ret = datos_piezas[23]["shape"].copy()
+    sh_ret.translate(App.Vector(0, 0, -195))
+    shapes_sub_transm.append(sh_ret)
+    puntos_sub_transm[23] = sh_ret.BoundBox.Center
+
+    sh_sufr_int = datos_piezas[4]["shape"].copy()
+    sh_sufr_int.translate(App.Vector(0, 0, -230))
+    shapes_sub_transm.append(sh_sufr_int)
+    puntos_sub_transm[4] = sh_sufr_int.BoundBox.Center
+
+    sh_tapa_sufr = datos_piezas[5]["shape"].copy()
+    sh_tapa_sufr.translate(App.Vector(0, 0, -265))
+    shapes_sub_transm.append(sh_tapa_sufr)
+    puntos_sub_transm[5] = sh_tapa_sufr.BoundBox.Center
+
+    sh_pas1 = datos_piezas[26]["shape"].copy()
+    sh_pas1.translate(App.Vector(0, -45, -35))
+    shapes_sub_transm.append(sh_pas1)
+    puntos_sub_transm[26] = sh_pas1.BoundBox.Center
+
+    sh_pas2 = datos_piezas[26]["shape"].copy()
+    sh_pas2.translate(App.Vector(0, 45, -15))
+    shapes_sub_transm.append(sh_pas2)
+
+    sh_pas3 = datos_piezas[26]["shape"].copy()
+    sh_pas3.translate(App.Vector(45, 0, 30))
+    shapes_sub_transm.append(sh_pas3)
+
+    sh_arod = datos_piezas[15]["shape"].copy()
+    sh_arod.translate(App.Vector(0, 0, 80))
+    shapes_sub_transm.append(sh_arod)
+    puntos_sub_transm[15] = sh_arod.BoundBox.Center
+
+    sh_skf = datos_piezas[22]["shape"].copy()
+    sh_skf.translate(App.Vector(0, 0, 120))
+    shapes_sub_transm.append(sh_skf)
+    puntos_sub_transm[22] = sh_skf.BoundBox.Center
+
+    sh_sufr_ext = datos_piezas[16]["shape"].copy()
+    sh_sufr_ext.translate(App.Vector(0, 0, 160))
+    shapes_sub_transm.append(sh_sufr_ext)
+    puntos_sub_transm[16] = sh_sufr_ext.BoundBox.Center
+
+    sh_aeje = datos_piezas[17]["shape"].copy()
+    sh_aeje.translate(App.Vector(0, 0, 200))
+    shapes_sub_transm.append(sh_aeje)
+    puntos_sub_transm[17] = sh_aeje.BoundBox.Center
+
+    sh_hus = datos_piezas[14]["shape"].copy()
+    sh_hus.translate(App.Vector(0, 0, 270))
+    shapes_sub_transm.append(sh_hus)
+    puntos_sub_transm[14] = sh_hus.BoundBox.Center
+
+    comp_sub_transm = Part.makeCompound(shapes_sub_transm)
+    obj_sub_transm = doc_planos.addObject("Part::Feature", "Subensamblaje_Transmision_Solido")
+    obj_sub_transm.Shape = comp_sub_transm
+    if getattr(obj_sub_transm, "ViewObject", None):
+        obj_sub_transm.ViewObject.Visibility = False
+    grupo_fuentes.addObject(obj_sub_transm)
+
+    escala_sub_transm = 0.52
+    v_sub_transm = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Sub_Transmision")
+    page_00b.addView(v_sub_transm)
+    v_sub_transm.Source = [obj_sub_transm]
+    v_sub_transm.Direction = App.Vector(1, -1, 1)
+    v_sub_transm.XDirection = App.Vector(1, 1, 0)
+    v_sub_transm.ScaleType = "Custom"
+    v_sub_transm.Scale = escala_sub_transm
+    v_sub_transm.X = 375.0
+    v_sub_transm.Y = 100.0
+    v_sub_transm.Caption = "Subensamblaje de Transmisión y Rodamientos (Despiece Explícito)"
+    estilizar_vista_iram(v_sub_transm, mostrar_ocultas=False, mostrar_centros=False)
+
+    centro_sub_transm = comp_sub_transm.BoundBox.Center
+    globos_sub_transm = [
+        (4, -34.0, -26.0),
+        (5, -34.0, 26.0),
+        (12, -34.0, -22.0),
+        (13, 0.0, 32.0),
+        (14, 38.0, 24.0),
+        (15, 26.0, 32.0),
+        (16, 26.0, 30.0),
+        (17, 26.0, -28.0),
+        (22, 24.0, -28.0),
+        (23, -34.0, 18.0),
+        (26, -24.0, -30.0),
+    ]
+    for it_num, dx, dy in globos_sub_transm:
+        pt3d = puntos_sub_transm.get(it_num)
+        if pt3d is not None:
+            agregar_globo_item(
+                doc_planos, page_00b, v_sub_transm, it_num, pt3d, centro_sub_transm, escala_sub_transm, dx, dy, "Tr"
+            )
 
     # =========================================================================
     # HOJA 3: PLANO 00c - LISTA DE MATERIALES Y DESPIECE IRAM 4508 (A3)
