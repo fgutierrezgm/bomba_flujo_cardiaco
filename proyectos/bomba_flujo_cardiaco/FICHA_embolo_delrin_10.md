@@ -23,8 +23,8 @@ Material: Delrin / Poliacetal POM-C (densidad `1.41 g/cm³` = `0.00000141 kg/mm�
 | Posición axial ranura (`z_ran`) | `8.00 mm` | plano | alta | Desde la cara `Z = 0` hasta el inicio de la ranura |
 | Círculo de posición (`d_c75`) | `Ø75.00 mm` | plano | alta | Común para los 2 alojamientos de guía (`Ø14`) y los 2 agujeros `M8x1.25` |
 | Agujeros para bujes guía (`d_aloj_guia`) | `2x Ø14.00 mm` pasantes | plano | alta | A `0°` y `180°` sobre `Ø75.00 mm` |
-| Corona de roscas M3 (`d_cor_m3`) | `Ø37.40 mm` | plano | alta | 4x a `0°, 90°, 180°, 270°` en ambas caras |
-| Roscas de fijación central (`d_m3`, `p_m3`) | `M3x0.5`, prof. `8.00 mm` | plano + norma | alta | Mecha `Ø2.50 mm`; 4 en cara `Z = 0` y 4 en cara `Z = 20.00 mm` |
+| Corona de roscas M3 (`d_cor_m3`) | `Ø37.40 mm` | plano | alta | 4x a `0°, 90°, 180°, 270°` en cara `Z = 0` (hacia `Centro_Embolo_1_11`) |
+| Roscas de fijación central (`d_m3`, `p_m3`) | `M3x0.5`, prof. `8.00 mm` | usuario + plano | alta | Mecha `Ø2.50 mm`; 4 en cara `Z = 0`. Se eliminaron las 4 de cara `Z = 20.00 mm` porque `Centro_Embolo_2_12` atornilla sobre el vástago de `Centro_Embolo_1_11` |
 | Roscas para sensor (`d_m8`) | `2x M8x1.25 - 6H` | usuario + norma | alta | Mecha `Ø6.80 mm`; sobre `Ø75.00 mm`, ciegos: uno en `Z = 0` a `45°` (enfrentando `Puerto_M12x1` de `Tapa_Interior_16b`) y otro en `Z = 20` a `315°` / `-45°` (enfrentando `Puerto_M12x1` de `Tapa_Exterior_16a`) |
 | Profundidad roscas M8 (`p_m8`) | `8.00 mm` (ciegos) | usuario | alta | Agujeros ciegos (`8.00 mm` por cara en espesor de `20.00 mm`, pared maciza intermedia de `4.00 mm`) para evitar cualquier fuga interna de fluido a través de las roscas de los topes |
 

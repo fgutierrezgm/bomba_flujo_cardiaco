@@ -24,8 +24,8 @@ DIMS = [
     ("z_ran",       "Posición axial ranura desde Z=0",              "8.00 mm",   "L", None,      "plano"),
     ("d_c75",       "Círculo de posición de guías y sensores M8",   "75.00 mm",  "L", None,      "plano"),
     ("d_aloj_guia", "Agujeros pasantes para bujes guía (2x)",       "14.00 mm",  "H", None,      "plano"),
-    ("d_cor_m3",    "Corona de agujeros roscados M3 (4x por cara)", "37.40 mm",  "L", None,      "plano"),
-    ("d_m3",        "Rosca M3x0.5 (4x en cada cara)",               "3.00 mm",   "R", "2.50 mm", "plano"),
+    ("d_cor_m3",    "Corona de agujeros roscados M3 (4x cara Z=0)", "37.40 mm",  "L", None,      "plano"),
+    ("d_m3",        "Rosca M3x0.5 (4x cara Z=0)",                   "3.00 mm",   "R", "2.50 mm", "plano"),
     ("p_m3",        "Profundidad roscas M3x0.5",                    "8.00 mm",   "L", None,      "plano"),
     ("d_m8",        "Rosca ciega M8x1.25 - 6H para topes FC (2x)",  "8.00 mm",   "R", "6.80 mm", "plano"),
     ("p_m8",        "Profundidad roscas ciegas M8x1.25 (sin fuga)", "8.00 mm",   "L", None,      "usuario"),
@@ -73,14 +73,12 @@ for i, s in enumerate((-1, 1), 1):
     cortes.append(pz.cil(f"Aloj_Guia_{i}", f"{p('d_aloj_guia')} / 2", f"{p('h_total')} + 2 mm",
                          x=f"{s} * ({p('d_c75')} / 2)", z="-1 mm"))
 
-# 4. Cuatro agujeros roscados M3x0.5 (prof. 8.00 mm) sobre Ø37.40 en AMBAS caras (Z=0 y Z=h_total)
+# 4. Cuatro agujeros roscados M3x0.5 (prof. 8.00 mm) sobre Ø37.40 en cara Z=0 (hacia Centro_Embolo_1_11)
 for i, ang in enumerate((0, 90, 180, 270), 1):
     x_m3 = f"({p('d_cor_m3')} / 2) * cos({ang} deg)"
     y_m3 = f"({p('d_cor_m3')} / 2) * sin({ang} deg)"
     cortes.append(pz.cil(f"M3_Inf_{i}", f"{p('d_m3')} / 2", f"{p('p_m3')} + 1 mm",
                          x=x_m3, y=y_m3, z="-1 mm"))
-    cortes.append(pz.cil(f"M3_Sup_{i}", f"{p('d_m3')} / 2", f"{p('p_m3')} + 1 mm",
-                         x=x_m3, y=y_m3, z=f"{p('h_total')} - {p('p_m3')}"))
 
 # 5. Dos agujeros roscados M8x1.25 - 6H sobre Ø75.00: uno en Z=0 (135°) y otro en Z=h_total (45°)
 cortes.append(pz.cil("M8_Sensor_1", f"{p('d_m8')} / 2", f"{p('p_m8')} + 1 mm",
