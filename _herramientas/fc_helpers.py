@@ -69,6 +69,41 @@ MATERIALES_BASE = {
         "color": (0.76, 0.52, 0.22),
         "transparencia": 0,
     },
+    "PLA_Estructural": {
+        "nombre": "PLA+ / PETG Estructural (Impresión 3D)",
+        "densidad_num": "0.00000124",
+        "densidad_desc": "1.24 g / cm^3 (kg / mm^3)",
+        "color": (0.20, 0.48, 0.75),
+        "transparencia": 0,
+    },
+    "Acrilico_PMMA": {
+        "nombre": "Acrílico Transparente PMMA",
+        "densidad_num": "0.00000119",
+        "densidad_desc": "1.19 g / cm^3 (kg / mm^3)",
+        "color": (0.78, 0.92, 0.98),
+        "transparencia": 75,
+    },
+    "Acero_1045": {
+        "nombre": "Acero SAE 1045",
+        "densidad_num": "0.00000785",
+        "densidad_desc": "7.85 g / cm^3 (kg / mm^3)",
+        "color": (0.50, 0.52, 0.56),
+        "transparencia": 0,
+    },
+    "AISI_304": {
+        "nombre": "Acero Inoxidable AISI 304/316L",
+        "densidad_num": "0.00000790",
+        "densidad_desc": "7.90 g / cm^3 (kg / mm^3)",
+        "color": (0.76, 0.78, 0.80),
+        "transparencia": 0,
+    },
+    "AISI_430": {
+        "nombre": "Acero Inoxidable Ferrítico AISI 430 (Ferromagnético)",
+        "densidad_num": "0.00000770",
+        "densidad_desc": "7.70 g / cm^3 (kg / mm^3)",
+        "color": (0.65, 0.68, 0.72),
+        "transparencia": 0,
+    },
 }
 
 # tipo de parámetro -> fórmula de la columna B (valor efectivo). D = nominal, E = mecha
