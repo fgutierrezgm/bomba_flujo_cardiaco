@@ -34,6 +34,35 @@ ESCALAS_IRAM = [
 ]
 
 
+def obtener_ruta_fcpat():
+    """Busca el archivo de tramas FCPat.pat o FCPAT.pat de TechDraw (tolerante a mayúsculas en Linux)."""
+    import glob
+    rutas_candidatas = [
+        "/snap/freecad/current/usr/share/Mod/TechDraw/PAT/FCPAT.pat",
+        "/snap/freecad/current/usr/share/Mod/TechDraw/PAT/FCPat.pat",
+        "/usr/share/freecad/Mod/TechDraw/PAT/FCPAT.pat",
+        "/usr/share/freecad/Mod/TechDraw/PAT/FCPat.pat",
+    ]
+    try:
+        if hasattr(App, "getUserAppDataDir"):
+            rutas_candidatas.append(os.path.join(App.getUserAppDataDir(), "Mod", "TechDraw", "PAT", "FCPat.pat"))
+            rutas_candidatas.append(os.path.join(App.getUserAppDataDir(), "Mod", "TechDraw", "PAT", "FCPAT.pat"))
+        if hasattr(App, "getResourceDir"):
+            res_dir = App.getResourceDir()
+            rutas_candidatas.extend([
+                os.path.join(res_dir, "Mod", "TechDraw", "PAT", "FCPAT.pat"),
+                os.path.join(res_dir, "Mod", "TechDraw", "PAT", "FCPat.pat"),
+            ])
+    except Exception:
+        pass
+    rutas_candidatas.extend(glob.glob("/snap/freecad/*/usr/share/Mod/TechDraw/PAT/FCPAT.pat"))
+    rutas_candidatas.extend(glob.glob("/snap/freecad/*/usr/share/Mod/TechDraw/PAT/FCPat.pat"))
+    for r in rutas_candidatas:
+        if os.path.isfile(r):
+            return r
+    return ""
+
+
 def _cargar_escudo_base64(ruta_png):
     if not os.path.exists(ruta_png):
         return ""
@@ -312,6 +341,45 @@ def _limites_aristas_2d(edges):
     return xmin, ymin, xmax, ymax
 
 
+def agregar_ejes_simetria_iram(vista, es_revolucion=False, dx_ext=6.0, dy_ext=6.0):
+    """
+    Agrega ejes de simetría (IRAM 4502 Tipo G: trazo y punto fino)
+    centrados en la vista según su BoundBox 2D.
+    Toma en cuenta vista.Scale para pasar coordenadas en escala de modelo 3D.
+    """
+    try:
+        edges = vista.getVisibleEdges()
+        if not edges:
+            return
+        xmin, ymin, xmax, ymax = _limites_aristas_2d(edges)
+        cx = 0.5 * (xmin + xmax)
+        cy = 0.5 * (ymin + ymax)
+        w = max(2.0, xmax - xmin)
+        h = max(2.0, ymax - ymin)
+        escala = float(getattr(vista, "Scale", 1.0) or 1.0)
+
+        # Coordenadas modelo = coordenadas papel / escala
+        cx_m = cx / escala
+        cy_m = cy / escala
+        hw_m = (0.5 * w + dx_ext) / escala
+        hh_m = (0.5 * h + dy_ext) / escala
+
+        # Eje horizontal (trazo y punto fino: patrón 4, grosor 0.20 mm)
+        vista.makeCosmeticLine(
+            App.Vector(cx_m - hw_m, cy_m, 0.0),
+            App.Vector(cx_m + hw_m, cy_m, 0.0),
+            4, 0.20, (0.0, 0.0, 0.0, 1.0),
+        )
+        # Eje vertical (trazo y punto fino: patrón 4, grosor 0.20 mm)
+        vista.makeCosmeticLine(
+            App.Vector(cx_m, cy_m - hh_m, 0.0),
+            App.Vector(cx_m, cy_m + hh_m, 0.0),
+            4, 0.20, (0.0, 0.0, 0.0, 1.0),
+        )
+    except Exception:
+        pass
+
+
 def _limites_seguros_hoja(vista, formato="A3"):
     """Devuelve (dx_min, dx_max, dy_min, dy_max) relativos a la vista dentro del área útil IRAM."""
     W, H = FORMATOS_IRAM.get(formato, (420.0, 297.0))
@@ -406,9 +474,20 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
         ly_min_caption = ymin + 2.0 if r_max_vista > 8.0 else cy_vista + 4.0
         dim.X = max(dx_min_s + 8.0, min(dx_max_s - 8.0, lx))
         dim.Y = max(max(dy_min_s + 4.0, ly_min_caption), min(dy_max_s - 4.0, ly))
+        _estilizar_cota(dim)
         cotas_creadas.append(dim)
 
     return cotas_creadas
+
+
+def _estilizar_cota(dim):
+    vo = getattr(dim, "ViewObject", None)
+    if vo:
+        try:
+            vo.Fontsize = 3.5
+            vo.Color = (0.0, 0.0, 0.0)
+        except Exception:
+            pass
 
 
 def _indices_extremos_vertices_2d(vista):
@@ -489,6 +568,7 @@ def acotar_vista_perfil_o_corte_iram(
             dim_h.References2D = [(vista, f"Vertex{i_miny}"), (vista, f"Vertex{i_maxy}")]
             dim_h.X = min(dx_max_s - 6.0, xmax + 9.5)
             dim_h.Y = cy_vista
+            _estilizar_cota(dim_h)
             cotas.append(dim_h)
         elif aristas_vert:
             aristas_vert.sort(key=lambda x: x[1], reverse=True)
@@ -501,6 +581,7 @@ def acotar_vista_perfil_o_corte_iram(
             dim_h.References2D = [(vista, f"Edge{idx_v}")]
             dim_h.X = min(dx_max_s - 6.0, xmax + 9.5)
             dim_h.Y = 0.5 * (yv0 + yv1)
+            _estilizar_cota(dim_h)
             cotas.append(dim_h)
 
         aristas_vert_ord = sorted(aristas_vert, key=lambda x: x[1], reverse=True)
@@ -514,6 +595,7 @@ def acotar_vista_perfil_o_corte_iram(
                 dim_h2.References2D = [(vista, f"Edge{idx_v2}")]
                 dim_h2.X = max(dx_min_s + 6.0, xmin - 9.5)
                 dim_h2.Y = 0.5 * (y2a + y2b)
+                _estilizar_cota(dim_h2)
                 cotas.append(dim_h2)
                 break
 
@@ -549,6 +631,7 @@ def acotar_vista_perfil_o_corte_iram(
             dim_w_int.References2D = [(vista, f"Vertex{par_interior[0]}"), (vista, f"Vertex{par_interior[1]}")]
             dim_w_int.X = cx_vista
             dim_w_int.Y = ymax + 7.5
+            _estilizar_cota(dim_w_int)
             cotas.append(dim_w_int)
             y_cota_total = ymax + 14.5
 
@@ -561,6 +644,7 @@ def acotar_vista_perfil_o_corte_iram(
             dim_w.References2D = [(vista, f"Vertex{i_minx}"), (vista, f"Vertex{i_maxx}")]
             dim_w.X = cx_vista
             dim_w.Y = min(dy_max_s - 3.5, y_cota_total)
+            _estilizar_cota(dim_w)
             cotas.append(dim_w)
         elif aristas_horiz:
             aristas_horiz.sort(key=lambda x: x[1], reverse=True)
@@ -573,6 +657,7 @@ def acotar_vista_perfil_o_corte_iram(
             dim_w.References2D = [(vista, f"Edge{idx_hz}")]
             dim_w.X = 0.5 * (xh0 + xh1)
             dim_w.Y = min(dy_max_s - 3.5, y_cota_total)
+            _estilizar_cota(dim_w)
             cotas.append(dim_w)
 
     return cotas
@@ -738,27 +823,32 @@ def acotar_detalles_y_roscas_corte_iram(
         x_mid = 0.5 * (xa + xb)
         r_nom = 0.5 * d_nom * escala
         try:
+            x_m0 = (x_mid - r_nom) / escala
+            x_m1 = (x_mid + r_nom) / escala
+            y_m0 = y0 / escala
+            y_m1 = y1 / escala
+            x_mid_m = x_mid / escala
             vista.makeCosmeticLine(
-                App.Vector(x_mid - r_nom, y0, 0),
-                App.Vector(x_mid - r_nom, y1, 0),
+                App.Vector(x_m0, y_m0, 0),
+                App.Vector(x_m0, y_m1, 0),
                 1, 0.18, (0.0, 0.0, 0.0, 1.0),
             )
             vista.makeCosmeticLine(
-                App.Vector(x_mid + r_nom, y0, 0),
-                App.Vector(x_mid + r_nom, y1, 0),
+                App.Vector(x_m1, y_m0, 0),
+                App.Vector(x_m1, y_m1, 0),
                 1, 0.18, (0.0, 0.0, 0.0, 1.0),
             )
             vista.makeCosmeticLine(
-                App.Vector(x_mid, y0 - 0.8, 0),
-                App.Vector(x_mid, y1 + 0.8, 0),
+                App.Vector(x_mid_m, y_m0 - 0.8 / escala, 0),
+                App.Vector(x_mid_m, y_m1 + 0.8 / escala, 0),
                 4, 0.15, (0.25, 0.25, 0.25, 1.0),
             )
             for _, dx_h, yh, xh0, xh1 in aristas_horiz:
                 if xh0 <= x_mid <= xh1 and dx_h <= (d_mecha * escala + 0.6):
                     if abs(yh - y0) < 0.2 or abs(yh - y1) < 0.2:
                         vista.makeCosmeticLine(
-                            App.Vector(x_mid - r_nom, yh, 0),
-                            App.Vector(x_mid + r_nom, yh, 0),
+                            App.Vector(x_m0, yh / escala, 0),
+                            App.Vector(x_m1, yh / escala, 0),
                             1, 0.18, (0.0, 0.0, 0.0, 1.0),
                         )
         except Exception:
@@ -780,6 +870,7 @@ def acotar_detalles_y_roscas_corte_iram(
                 dim_r.FormatSpec = f"{etiq} prof. %.2w"
                 dim_r.References2D = [(vista, f"Edge{idx_a}")]
                 dim_r.X, dim_r.Y = pos
+                _estilizar_cota(dim_r)
                 cotas_nuevas.append(dim_r)
                 pos_ocupadas.append(pos)
                 prof_acotadas.add(clave_prof)
@@ -815,6 +906,7 @@ def acotar_detalles_y_roscas_corte_iram(
             dim_i.FormatSpec = "%.2w"
             dim_i.References2D = [(vista, f"Edge{idx_e}")]
             dim_i.X, dim_i.Y = pos
+            _estilizar_cota(dim_i)
             cotas_nuevas.append(dim_i)
             pos_ocupadas.append(pos)
             prof_acotadas.add((alias, round(val_mm, 2)))
@@ -851,8 +943,29 @@ def crear_vista_detalle_roscas_iram(
     det.Reference = ref_letra
     det.X = x_detalle
     det.Y = y_detalle
-    det.Caption = f"Detalle {ref_letra} (Escala {escala_detalle:.0f}:1)"
+    det.Caption = ""
+    det.ShowHighlight = False
+    det.ShowMatting = False
     estilizar_vista_iram(det, mostrar_ocultas=False, mostrar_centros=False)
+
+    # Aro fino normalizado IRAM 4502 de contorno
+    try:
+        det.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), radio_corte, 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+    except Exception:
+        pass
+
+    # Título independiente desacoplado de la vista
+    r_papel = radio_corte * escala_detalle
+    try:
+        ann = doc.addObject("TechDraw::DrawViewAnnotation", f"{prefijo_nombre}_Txt_Det_{ref_letra}")
+        page.addView(ann)
+        ann.Text = [f"DETALLE {ref_letra} ({int(escala_detalle)}:1)"]
+        ann.TextSize = 3.5
+        ann.X = x_detalle
+        ann.Y = y_detalle - r_papel - 5.5
+    except Exception:
+        pass
+
     doc.recompute()
 
     try:

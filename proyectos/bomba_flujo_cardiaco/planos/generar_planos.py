@@ -49,11 +49,13 @@ from planos_iram import (
     acotar_detalles_y_roscas_corte_iram,
     acotar_vista_circular_iram,
     acotar_vista_perfil_o_corte_iram,
+    agregar_ejes_simetria_iram,
     asegurar_plantillas_iram,
     crear_vista_detalle_roscas_iram,
     estilizar_vista_iram,
     generar_svg_bloque_cotas_pieza,
     generar_svg_tabla_bom_iram,
+    obtener_ruta_fcpat,
     seleccionar_formato_y_escala,
 )
 
@@ -743,9 +745,14 @@ def _crear_pagina_iram(doc, nombre_obj, etiqueta, formato, rutas_plantillas, tex
 
     et = dict(tmpl.EditableTexts)
     for k, v in textos_rotulo.items():
-        if k in et:
+        try:
+            tmpl.setEditFieldContent(k, str(v))
+        except Exception:
             et[k] = str(v)
-    tmpl.EditableTexts = et
+    try:
+        tmpl.EditableTexts = et
+    except Exception:
+        pass
     return page, tmpl
 
 
@@ -753,6 +760,7 @@ def main():
     print("FreeCAD", ".".join(App.Version()[:3]))
     os.makedirs(DIR_PLANOS, exist_ok=True)
     rutas_plantillas = asegurar_plantillas_iram(DIR_PLANTILLAS)
+    pat_file = obtener_ruta_fcpat()
 
     # 1. Abrir el ensamblaje Piloto_Embolo_Assembly para leer los Placements de las 40 instancias
     if not os.path.exists(RUTA_ASM):
@@ -865,7 +873,7 @@ def main():
     v_arm_frente.Scale = 0.5
     v_arm_frente.X = 120.0
     v_arm_frente.Y = 210.0
-    v_arm_frente.Caption = "Vista Frontal Exterior (Escala 1:2)"
+    v_arm_frente.Caption = ""
     estilizar_vista_iram(v_arm_frente, mostrar_ocultas=False, mostrar_centros=True)
 
     # Corte Longitudinal A-A pasando por el plano XZ central
@@ -877,11 +885,17 @@ def main():
     v_arm_corte.SectionDirection = "Right"
     v_arm_corte.SectionOrigin = App.Vector(0, 0, 210)
     v_arm_corte.SectionSymbol = "A"
+    v_arm_corte.SectionLineStretch = 1.0
     v_arm_corte.ScaleType = "Custom"
     v_arm_corte.Scale = 0.5
     v_arm_corte.X = 285.0
     v_arm_corte.Y = 210.0
-    v_arm_corte.Caption = "Corte Longitudinal A-A (Carrera máx. pistón = 200 mm)"
+    v_arm_corte.Caption = ""
+    v_arm_corte.FuseBeforeCut = True
+    v_arm_corte.CutSurfaceDisplay = "PatHatch"
+    v_arm_corte.FileGeomPattern = pat_file
+    v_arm_corte.NameGeomPattern = "Diagonal4"
+    v_arm_corte.HatchScale = 2.0
     estilizar_vista_iram(v_arm_corte, mostrar_ocultas=False, mostrar_centros=True)
 
     # Vista Isométrica 3D del conjunto armado
@@ -894,8 +908,36 @@ def main():
     v_arm_iso.Scale = 0.5
     v_arm_iso.X = 465.0
     v_arm_iso.Y = 245.0
-    v_arm_iso.Caption = "Perspectiva Isométrica Armado (Escala 1:2)"
+    v_arm_iso.Caption = ""
     estilizar_vista_iram(v_arm_iso, mostrar_ocultas=False, mostrar_centros=False)
+
+    # Títulos independientes desacoplados para V00a
+    try:
+        t_f = doc_planos.addObject("TechDraw::DrawViewAnnotation", "Txt_00a_Frente")
+        page_00a.addView(t_f)
+        t_f.Text = ["VISTA FRONTAL (1:2)"]
+        t_f.TextSize = 4.0
+        t_f.X = 120.0
+        t_f.Y = 320.0
+
+        t_c = doc_planos.addObject("TechDraw::DrawViewAnnotation", "Txt_00a_Corte")
+        page_00a.addView(t_c)
+        t_c.Text = ["CORTE LONGITUDINAL A-A (1:2)"]
+        t_c.TextSize = 4.0
+        t_c.X = 285.0
+        t_c.Y = 320.0
+
+        t_iso = doc_planos.addObject("TechDraw::DrawViewAnnotation", "Txt_00a_Iso")
+        page_00a.addView(t_iso)
+        t_iso.Text = ["PERSPECTIVA ISOMÉTRICA (1:2)"]
+        t_iso.TextSize = 4.0
+        t_iso.X = 465.0
+        t_iso.Y = 345.0
+
+        agregar_ejes_simetria_iram(v_arm_frente)
+        agregar_ejes_simetria_iram(v_arm_corte)
+    except Exception:
+        pass
 
     # =========================================================================
     # HOJA 2: PLANO 00b - VISTA EXPLOTADA REORGANIZADA POR SUBENSAMBLAJES (IRAM A2)
@@ -1363,16 +1405,18 @@ def main():
         else:
             y_base_min = 14.0
 
-        y_corte_min = y_base_min + 13.0 + 0.5 * h_corte
-        y_planta_max = (H_hoja - 20.0) - 0.5 * h_planta
-        gap_vistas = 38.0
+        # Disposición ISO-E (IRAM 4501-2, Primer Diedro):
+        # Vista en Corte / Frontal ARRIBA, Vista Superior / Planta ABAJO
+        y_planta_min = y_base_min + 12.0 + 0.5 * h_planta
+        y_corte_max = (H_hoja - 18.0) - 0.5 * h_corte
+        gap_vistas = 36.0
         altura_stack = h_corte + gap_vistas + h_planta
-        espacio_col = (y_planta_max + 0.5 * h_planta) - (y_corte_min - 0.5 * h_corte)
+        espacio_col = (y_corte_max + 0.5 * h_corte) - (y_planta_min - 0.5 * h_planta)
         holgura_vert = max(0.0, 0.5 * (espacio_col - altura_stack))
-        y_corte = y_corte_min + holgura_vert
-        y_planta = min(y_planta_max, y_corte + 0.5 * h_corte + gap_vistas + 0.5 * h_planta)
+        y_planta = y_planta_min + holgura_vert
+        y_corte = min(y_corte_max, y_planta + 0.5 * h_planta + gap_vistas + 0.5 * h_corte)
 
-        # 1. Vista Superior / Frontal Circular (Planta desde +Z)
+        # 1. Vista Superior / Frontal Circular (Planta desde +Z, abajo según ISO-E)
         v_sup = doc_planos.addObject("TechDraw::DrawViewPart", f"VP_{it_num:02d}_Planta")
         page_p.addView(v_sup)
         v_sup.Source = [obj_p]
@@ -1382,23 +1426,29 @@ def main():
         v_sup.Scale = escala_num
         v_sup.X = x_vistas
         v_sup.Y = y_planta
-        v_sup.Caption = f"Vista Superior (Escala {escala_txt})"
+        v_sup.Caption = ""
         estilizar_vista_iram(v_sup, mostrar_ocultas=False, mostrar_centros=True)
 
-        # 2. Vista en Corte Longitudinal A-A (pasando por el eje de simetría Z)
+        # 2. Vista en Corte Longitudinal A-A (arriba de Planta según ISO-E)
         v_sec = doc_planos.addObject("TechDraw::DrawViewSection", f"VP_{it_num:02d}_Corte_AA")
         page_p.addView(v_sec)
         v_sec.BaseView = v_sup
         v_sec.Source = [obj_p]
         v_sec.SectionNormal = App.Vector(0, -1, 0)
-        v_sec.SectionDirection = "Down"
+        v_sec.SectionDirection = "Up"
         v_sec.SectionOrigin = bb.Center
         v_sec.SectionSymbol = "A"
+        v_sec.SectionLineStretch = 1.0
         v_sec.ScaleType = "Custom"
         v_sec.Scale = escala_num
         v_sec.X = x_vistas
         v_sec.Y = y_corte
-        v_sec.Caption = f"Corte Longitudinal A-A (Escala {escala_txt})"
+        v_sec.Caption = ""
+        v_sec.FuseBeforeCut = True
+        v_sec.CutSurfaceDisplay = "PatHatch"
+        v_sec.FileGeomPattern = pat_file
+        v_sec.NameGeomPattern = "Diagonal4"
+        v_sec.HatchScale = 2.0
         estilizar_vista_iram(v_sec, mostrar_ocultas=False, mostrar_centros=True)
 
         # 3. Vista Isométrica 3D de referencia
@@ -1411,8 +1461,37 @@ def main():
         v_iso.Scale = escala_iso
         v_iso.X = x_der
         v_iso.Y = y_iso
-        v_iso.Caption = "Perspectiva Isométrica"
+        v_iso.Caption = ""
         estilizar_vista_iram(v_iso, mostrar_ocultas=False, mostrar_centros=False)
+
+        # Títulos independientes desacoplados con DrawViewAnnotation
+        try:
+            t_sec = doc_planos.addObject("TechDraw::DrawViewAnnotation", f"Txt_{it_num:02d}_Corte")
+            page_p.addView(t_sec)
+            t_sec.Text = [f"SECCIÓN A - A ({escala_txt})"]
+            t_sec.TextSize = 3.6
+            t_sec.X = x_vistas
+            t_sec.Y = min(H_hoja - 10.0, y_corte + 0.5 * h_corte + 8.0)
+
+            t_sup = doc_planos.addObject("TechDraw::DrawViewAnnotation", f"Txt_{it_num:02d}_Planta")
+            page_p.addView(t_sup)
+            t_sup.Text = [f"VISTA SUPERIOR ({escala_txt})"]
+            t_sup.TextSize = 3.2
+            t_sup.X = x_vistas
+            t_sup.Y = max(y_base_min + 2.0, y_planta - 0.5 * h_planta - 7.0)
+
+            t_iso = doc_planos.addObject("TechDraw::DrawViewAnnotation", f"Txt_{it_num:02d}_Iso")
+            page_p.addView(t_iso)
+            t_iso.Text = ["PERSPECTIVA ISOMÉTRICA"]
+            t_iso.TextSize = 3.2
+            t_iso.X = x_der
+            t_iso.Y = min(H_hoja - 10.0, y_iso + 0.5 * h_iso_disp + 3.0)
+
+            # Ejes de simetría Tipo G IRAM 4502
+            agregar_ejes_simetria_iram(v_sup, es_revolucion=es_rev)
+            agregar_ejes_simetria_iram(v_sec, es_revolucion=es_rev)
+        except Exception:
+            pass
 
         # 4. Cuadro técnico vectorial de parámetros, roscas y tolerancias extraído de `Parametros`
         simb_cotas = doc_planos.addObject("TechDraw::DrawViewSymbol", f"VP_{it_num:02d}_Cuadro_Cotas")
@@ -1480,20 +1559,7 @@ def main():
             )
             total_cotas_geom += len(c_det)
             if it_num == 3:
-                _, c_det_v = crear_vista_detalle_roscas_iram(
-                    doc_planos,
-                    page_p,
-                    v_sec,
-                    f"VP_{it_num:02d}",
-                    info["filas_param"],
-                    anchor_point=App.Vector(-34.5, -3.5, 0.0),
-                    x_detalle=float(v_sec.X.Value),
-                    y_detalle=54.0,
-                    radio_corte=9.5,
-                    escala_detalle=2.0,
-                    ref_letra="A",
-                )
-                total_cotas_geom += len(c_det_v)
+                pass
 
     doc_planos.recompute()
     doc_planos.saveAs(RUTA_SALIDA_FCSTD)
@@ -1504,6 +1570,9 @@ def main():
     os.makedirs(dir_hojas, exist_ok=True)
     paginas = [o for o in doc_planos.Objects if o.TypeId == "TechDraw::DrawPage"]
     for pag in paginas:
+        if pag.Name == "Plano_03_Tapa_Interior_16b":
+            # Conservar el archivo individual especializado y validado por Argon
+            continue
         d_ind = App.newDocument(pag.Name)
         d_ind.copyObject(pag, True)
         d_ind.copyObject(dr, False)
