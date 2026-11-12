@@ -90,7 +90,7 @@
       <text freecad:editable="MASA" x="503.00" y="408.50" font-size="2.2"><tspan>Masa: - g</tspan></text>
 
       <!-- Autor, Aprobado y Número de Plano -->
-      <text freecad:editable="AUTOR" x="543.00" y="395.20" font-size="2.3"><tspan>Dib.: F. Gutiérrez</tspan></text>
+      <text freecad:editable="AUTOR" x="541.00" y="395.20" font-size="2.5"><tspan>Dib.: F. Gutiérrez</tspan></text>
       <text freecad:editable="APROBADO" x="543.00" y="398.80" font-size="2.3"><tspan>Apr.: Ing. A. Bonino</tspan></text>
       <text freecad:editable="NUM_PLANO" x="562.50" y="408.00" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
     </g>

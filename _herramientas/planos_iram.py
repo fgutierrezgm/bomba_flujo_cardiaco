@@ -212,7 +212,7 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
       <text freecad:editable="MASA" x="{rx + 94.0:.2f}" y="{ry + 49.5:.2f}" font-size="2.2"><tspan>Masa: - g</tspan></text>
 
       <!-- Autor, Aprobado y Número de Plano -->
-      <text freecad:editable="AUTOR" x="{rx + 134.0:.2f}" y="{ry + 36.2:.2f}" font-size="2.3"><tspan>Dib.: F. Gutiérrez</tspan></text>
+      <text freecad:editable="AUTOR" x="{rx + 132.0:.2f}" y="{ry + 36.2:.2f}" font-size="2.5"><tspan>Dib.: F. Gutiérrez</tspan></text>
       <text freecad:editable="APROBADO" x="{rx + 134.0:.2f}" y="{ry + 39.8:.2f}" font-size="2.3"><tspan>Apr.: Ing. A. Bonino</tspan></text>
       <text freecad:editable="NUM_PLANO" x="{rx + 153.5:.2f}" y="{ry + 49.0:.2f}" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
     </g>
