@@ -818,26 +818,29 @@ def _crear_pagina_iram(doc_planos, nombre_pagina, titulo_pagina, formato, rutas_
 
 
 def _agregar_globo(doc_planos, page, vista, item_num, pt3d_centro, centro_vista, escala_vista, dx, dy, prefijo=""):
-    """Proyecta un punto 3D isométrico (Direction=(1,-1,1), XDirection=(1,1,0)) al sistema de la vista."""
+    """Proyecta un punto 3D isométrico al sistema de `DrawViewBalloon` (coordenadas de la vista fuente)."""
     rel = pt3d_centro - centro_vista
     # Vectores unitarios de proyección isométrica estándar en planos_iram / generar_planos
     ux = App.Vector(1.0, 1.0, 0.0).normalize()
     uz_dir = App.Vector(1.0, -1.0, 1.0).normalize()
     uy = uz_dir.cross(ux).normalize()  # (-1, 1, 2)/sqrt(6)
 
-    ox = rel.dot(ux) * escala_vista
-    oy = rel.dot(uy) * escala_vista
+    # FreeCAD TechDraw escala OriginX/Y y X/Y de DrawViewBalloon por SourceView.Scale
+    ox = rel.dot(ux)
+    oy = rel.dot(uy)
 
     bal = doc_planos.addObject("TechDraw::DrawViewBalloon", f"Globo_{prefijo}_{item_num:02d}")
     page.addView(bal)
     bal.SourceView = vista
     bal.OriginX = ox
     bal.OriginY = oy
-    bal.X = ox + dx
-    bal.Y = oy + dy
+    bal.X = ox + (dx / escala_vista)
+    bal.Y = oy + (dy / escala_vista)
     bal.Text = str(item_num)
     bal.BubbleShape = "Circular"
     bal.EndType = "Filled arrow"
+    bal.ShapeScale = 0.78
+    bal.KinkLength = 3.5
     vo = getattr(bal, "ViewObject", None)
     if vo:
         try:
@@ -1145,16 +1148,16 @@ def main():
 
     centro_gen = comp_exp_gen.BoundBox.Center
     globos_gen = [
-        (23, 52.0, 22.0),
-        (19, -56.0, 20.0),
-        (3, 54.0, 12.0),
-        (18, -56.0, 8.0),
-        (2, 56.0, -8.0),
-        (26, -54.0, -14.0),
-        (1, -56.0, -24.0),
-        (20, -56.0, -34.0),
-        (21, 58.0, 16.0),
-        (22, 58.0, -20.0),
+        (23, 58.0, 20.0),
+        (19, -62.0, 24.0),
+        (3, 64.0, 20.0),
+        (18, -62.0, 10.0),
+        (2, 66.0, -10.0),
+        (26, -62.0, 14.0),
+        (1, -62.0, 0.0),
+        (20, -62.0, -4.0),
+        (21, 66.0, 16.0),
+        (22, 64.0, -14.0),
     ]
     for it_num, dx, dy in globos_gen:
         pt3d = puntos_globo_gen.get(it_num)
@@ -1224,7 +1227,7 @@ def main():
     v_sub_emb.Scale = escala_sub_emb
     v_sub_emb.X = 120.0
     v_sub_emb.Y = 95.0
-    v_sub_emb.Caption = "Subensamblaje de Émbolo, Sensor y Guías (Ítems 6, 7, 8, 9, 10, 11, 27)"
+    v_sub_emb.Caption = ""
     estilizar_vista_iram(v_sub_emb, mostrar_ocultas=False, mostrar_centros=False)
 
     centro_sub_emb = comp_sub_emb.BoundBox.Center
@@ -1290,24 +1293,24 @@ def main():
     v_sub_tr.Scale = escala_sub_tr
     v_sub_tr.X = 308.0
     v_sub_tr.Y = 96.0
-    v_sub_tr.Caption = "Subensamblaje de Transmisión y Sellado (Ítems 4,5,12..17,24,25,28..30)"
+    v_sub_tr.Caption = ""
     estilizar_vista_iram(v_sub_tr, mostrar_ocultas=False, mostrar_centros=False)
 
     centro_sub_tr = comp_sub_tr.BoundBox.Center
     for it_num, dx, dy in [
-        (12, 42.0, 14.0),
-        (24, 42.0, 2.0),
-        (15, -42.0, 16.0),
-        (29, -46.0, 6.0),
-        (17, 42.0, -8.0),
-        (28, -46.0, -4.0),
-        (13, 42.0, -18.0),
-        (4,  -42.0, -14.0),
-        (25, -44.0, -24.0),
-        (5,  -42.0, -34.0),
-        (30, 44.0, -34.0),
-        (16, -42.0, -44.0),
-        (14, 42.0, -21.0),
+        (12, 46.0, 14.0),
+        (24, 46.0, 4.0),
+        (15, -46.0, 16.0),
+        (29, -50.0, 8.0),
+        (17, 46.0, -4.0),
+        (28, -50.0, 0.0),
+        (13, 46.0, -16.0),
+        (4,  -46.0, -8.0),
+        (25, -48.0, -16.0),
+        (5,  -46.0, -24.0),
+        (30, 48.0, -26.0),
+        (16, -46.0, -31.0),
+        (14, 46.0, -22.0),
     ]:
         _agregar_globo(doc_planos, page_00b, v_sub_tr, it_num, puntos_sub_tr[it_num], centro_sub_tr, escala_sub_tr, dx, dy, "Tr")
 
