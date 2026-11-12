@@ -494,14 +494,26 @@ def _indices_extremos_vertices_2d(vista):
     """Devuelve los índices (i_minx, i_maxx, i_miny, i_maxy) y límites de `getVisibleVertexes()`."""
     try:
         vs = vista.getVisibleVertexes()
+        edges = vista.getVisibleEdges()
     except Exception:
         vs = []
+        edges = []
     if not vs:
         return None
-    i_minx = min(range(len(vs)), key=lambda i: (vs[i].x, abs(vs[i].y)))
-    i_maxx = max(range(len(vs)), key=lambda i: (vs[i].x, -abs(vs[i].y)))
-    i_miny = min(range(len(vs)), key=lambda i: (vs[i].y, abs(vs[i].x)))
-    i_maxy = max(range(len(vs)), key=lambda i: (vs[i].y, -abs(vs[i].x)))
+    if edges:
+        ex0, ey0, ex1, ey1 = _limites_aristas_2d(edges)
+        validos = [
+            i for i, v in enumerate(vs)
+            if (ex0 - 0.5) <= v.x <= (ex1 + 0.5) and (ey0 - 0.5) <= v.y <= (ey1 + 0.5)
+        ]
+    else:
+        validos = list(range(len(vs)))
+    if not validos:
+        validos = list(range(len(vs)))
+    i_minx = min(validos, key=lambda i: (vs[i].x, abs(vs[i].y)))
+    i_maxx = max(validos, key=lambda i: (vs[i].x, -abs(vs[i].y)))
+    i_miny = min(validos, key=lambda i: (vs[i].y, abs(vs[i].x)))
+    i_maxy = max(validos, key=lambda i: (vs[i].y, -abs(vs[i].x)))
     xmin = vs[i_minx].x
     xmax = vs[i_maxx].x
     ymin = vs[i_miny].y
