@@ -28,6 +28,7 @@ Exportación opcional de PDFs bajo demanda (Regla 3.1: desactivada por defecto):
 """
 import math
 import os
+import re
 import sys
 import FreeCAD as App
 import Part
@@ -596,15 +597,20 @@ def _extraer_shape_solido_documento(doc_pieza, modo_diseno_forzado=None):
                 continue
             try:
                 val = sp.get(f"B{fila}")
-                unid = sp.get(f"C{fila}") or "mm"
-                desc = sp.get(f"E{fila}") or alias
-                if isinstance(val, (int, float)):
-                    val_str = f"{float(val):.2f} {unid}".strip()
-                else:
-                    val_str = f"{val} {unid}".strip()
-                filas_param.append((alias, val_str, str(desc)))
             except Exception:
-                pass
+                continue
+            try:
+                desc = sp.get(f"C{fila}") or alias
+            except Exception:
+                desc = alias
+            if hasattr(val, "Value"):
+                unit_txt = val.getUserPreferred()[2] if hasattr(val, "getUserPreferred") else "mm"
+                val_str = f"{float(val.Value):.2f} {unit_txt}".strip()
+            elif isinstance(val, (int, float)):
+                val_str = f"{float(val):.2f}"
+            else:
+                val_str = str(val).strip()
+            filas_param.append((alias, val_str, str(desc).strip()))
 
     # Restaurar modo original si fue cambiado
     if sp and modo_orig is not None and str(modo_diseno_forzado) != modo_orig:
@@ -1312,21 +1318,25 @@ def main():
         )
 
         # Cálculo dinámico de posiciones para evitar superposición de rótulo, tabla, vistas, títulos y cotas
-        n_filas_t = min(len(filas_param), 22)
-        alto_tabla_raw = 8.0 + n_filas_t * 4.2
-        alto_notas_raw = (6.0 + len(entrada["notas_taller"]) * 3.8) if entrada["notas_taller"] else 0.0
-        H_raw_tabla = alto_tabla_raw + alto_notas_raw + 2.0
-
         if formato == "A4":
             x_vistas = 86.0
             x_der = 224.0
             ancho_tabla = 108.0
-            escala_tabla = round(min(0.82, 74.0 / max(1.0, H_raw_tabla)), 3)
+            max_h_tabla = 74.0
+            max_esc_tabla = 0.82
         else:
             x_vistas = 132.0
             x_der = 322.0
             ancho_tabla = 148.0
-            escala_tabla = round(min(0.95, 138.0 / max(1.0, H_raw_tabla)), 3)
+            max_h_tabla = 138.0
+            max_esc_tabla = 0.95
+
+        svg_cuadro = generar_svg_bloque_cotas_pieza(
+            filas_param, entrada["notas_taller"], ancho_mm=ancho_tabla
+        )
+        m_h_tbl = re.search(r'height="([\d.]+)mm"', svg_cuadro)
+        H_raw_tabla = float(m_h_tbl.group(1)) if m_h_tbl else (14.0 + min(len(filas_param), 22) * 4.2)
+        escala_tabla = round(min(max_esc_tabla, max_h_tabla / max(1.0, H_raw_tabla)), 3)
 
         H_tabla_real = H_raw_tabla * escala_tabla
         y_tabla = 65.0 + 0.5 * H_tabla_real
@@ -1403,9 +1413,7 @@ def main():
         # 4. Cuadro técnico vectorial de parámetros, roscas y tolerancias extraído de `Parametros`
         simb_cotas = doc_planos.addObject("TechDraw::DrawViewSymbol", f"VP_{it_num:02d}_Cuadro_Cotas")
         page_p.addView(simb_cotas)
-        simb_cotas.Symbol = generar_svg_bloque_cotas_pieza(
-            filas_param, entrada["notas_taller"], ancho_mm=ancho_tabla
-        )
+        simb_cotas.Symbol = svg_cuadro
         simb_cotas.ScaleType = "Custom"
         simb_cotas.Scale = escala_tabla
         simb_cotas.X = x_der

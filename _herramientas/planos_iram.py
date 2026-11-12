@@ -14,6 +14,7 @@ Normas aplicadas:
 import base64
 import math
 import os
+import textwrap
 import FreeCAD as App
 import Part
 
@@ -598,6 +599,15 @@ def _escapar_xml(texto):
     )
 
 
+def _truncar_texto(txt, max_ancho_mm, font_size):
+    """Recorta texto estimando ancho en mm para evitar desbordes entre columnas SVG."""
+    s = str(txt or "").strip()
+    max_chars = max(4, int(max_ancho_mm / max(0.5, font_size * 0.58)))
+    if len(s) <= max_chars:
+        return s
+    return s[: max(1, max_chars - 2)] + ".."
+
+
 def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0):
     """
     Genera un bloque SVG vectorial limpio con todas las cotas nominales, roscas,
@@ -606,17 +616,34 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
     alto_fila = 4.2
     n_filas = min(len(filas_parametros), 22)
     alto_tabla = 8.0 + n_filas * alto_fila
-    alto_notas = 6.0 + len(notas_taller) * 3.8 if notas_taller else 0.0
-    H = alto_tabla + alto_notas + 2.0
     W = ancho_mm
+
+    # Envolver notas técnicas al ancho útil de la caja
+    max_chars_nota = max(32, int((W - 6.0) / (2.15 * 0.58)))
+    lineas_notas = []
+    for nota in notas_taller or []:
+        envueltas = textwrap.wrap(str(nota).strip(), width=max_chars_nota - 2) or [""]
+        for k, seg in enumerate(envueltas):
+            prefijo = "• " if k == 0 else "  "
+            lineas_notas.append(prefijo + seg)
+
+    alto_notas = (6.0 + len(lineas_notas) * 3.6) if lineas_notas else 0.0
+    H = alto_tabla + alto_notas + 2.0
+
+    # Columnas: [0.5..26.0] Símbolo | [26.0..46.5] Valor | [46.5..W-0.5] Descripción
+    x_div1 = 26.0
+    x_div2 = 46.5
+    x_val_end = 45.0
+    x_desc = 48.0
+    w_desc = max(20.0, W - x_desc - 1.5)
 
     lineas = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W:.1f}mm" height="{H:.1f}mm" viewBox="0 0 {W:.1f} {H:.1f}">',
         f'<rect x="0.5" y="0.5" width="{W - 1.0:.1f}" height="{alto_tabla - 0.5:.1f}" fill="#ffffff" stroke="#000000" stroke-width="0.45"/>',
         f'<rect x="0.5" y="0.5" width="{W - 1.0:.1f}" height="6.5" fill="#eaeff5" stroke="#000000" stroke-width="0.45"/>',
-        f'<text x="{W / 2:.1f}" y="4.8" font-family="Liberation Sans, Arial, sans-serif" font-size="2.9" font-weight="bold" text-anchor="middle">CUADRO DE COTAS FUNCIONALES, ROSCAS Y TOLERANCIAS (IRAM 4503)</text>',
-        f'<line x1="23.0" y1="7.0" x2="23.0" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
-        f'<line x1="42.0" y1="7.0" x2="42.0" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
+        f'<text x="{W / 2:.1f}" y="4.8" font-family="Liberation Sans, Arial, sans-serif" font-size="{2.9 if W >= 130 else 2.4:.1f}" font-weight="bold" text-anchor="middle">CUADRO DE COTAS FUNCIONALES, ROSCAS Y TOLERANCIAS (IRAM 4503)</text>',
+        f'<line x1="{x_div1:.1f}" y1="7.0" x2="{x_div1:.1f}" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
+        f'<line x1="{x_div2:.1f}" y1="7.0" x2="{x_div2:.1f}" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
     ]
 
     for idx, (simbolo, valor_unid, descripcion) in enumerate(filas_parametros[:n_filas]):
@@ -626,18 +653,20 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
             lineas.append(
                 f'<line x1="0.5" y1="{y_top:.2f}" x2="{W - 0.5:.1f}" y2="{y_top:.2f}" stroke="#cccccc" stroke-width="0.20"/>'
             )
-        desc_corta = descripcion if len(descripcion) <= 34 else descripcion[:32] + ".."
+        simb_corta = _truncar_texto(simbolo, x_div1 - 3.0, 2.25)
+        val_corta = _truncar_texto(valor_unid, x_div2 - x_div1 - 2.5, 2.35)
+        desc_corta = _truncar_texto(descripcion, w_desc, 2.15)
         lineas.append(
-            f'<text x="2.0" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.3" font-weight="bold">{_escapar_xml(simbolo)}</text>'
+            f'<text x="2.0" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.25" font-weight="bold">{_escapar_xml(simb_corta)}</text>'
         )
         lineas.append(
-            f'<text x="40.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.4" text-anchor="end">{_escapar_xml(valor_unid)}</text>'
+            f'<text x="{x_val_end:.1f}" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.35" text-anchor="end">{_escapar_xml(val_corta)}</text>'
         )
         lineas.append(
-            f'<text x="43.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.15">{_escapar_xml(desc_corta)}</text>'
+            f'<text x="{x_desc:.1f}" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.15">{_escapar_xml(desc_corta)}</text>'
         )
 
-    if notas_taller:
+    if lineas_notas:
         y_n0 = alto_tabla + 1.5
         lineas.append(
             f'<rect x="0.5" y="{y_n0:.2f}" width="{W - 1.0:.1f}" height="{alto_notas - 1.0:.2f}" fill="#fcfcfc" stroke="#000000" stroke-width="0.35"/>'
@@ -645,10 +674,10 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
         lineas.append(
             f'<text x="2.0" y="{y_n0 + 3.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.4" font-weight="bold">NOTAS TÉCNICAS Y TOLERANCIAS:</text>'
         )
-        for j, nota in enumerate(notas_taller):
+        for j, nota_ln in enumerate(lineas_notas):
             yn = y_n0 + 7.2 + j * 3.6
             lineas.append(
-                f'<text x="2.5" y="{yn:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.15">• {_escapar_xml(nota)}</text>'
+                f'<text x="2.5" y="{yn:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.15">{_escapar_xml(nota_ln)}</text>'
             )
 
     lineas.append("</svg>")
@@ -731,16 +760,16 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
             f'<text x="25.0" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.8" font-weight="bold" text-anchor="middle">{it["cantidad"]}</text>'
         )
         svg.append(
-            f'<text x="36.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6">{_escapar_xml(it["denominacion"])}</text>'
+            f'<text x="36.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6">{_escapar_xml(_truncar_texto(it["denominacion"], 76.5, 2.6))}</text>'
         )
         svg.append(
-            f'<text x="137.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.5" text-anchor="middle">{_escapar_xml(it["plano_ref"])}</text>'
+            f'<text x="137.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.5" text-anchor="middle">{_escapar_xml(_truncar_texto(it["plano_ref"], 42.0, 2.5))}</text>'
         )
         svg.append(
-            f'<text x="162.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.5">{_escapar_xml(it["material"])}</text>'
+            f'<text x="162.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.5">{_escapar_xml(_truncar_texto(it["material"], 70.5, 2.5))}</text>'
         )
         svg.append(
-            f'<text x="237.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.45">{_escapar_xml(it["detalles"])}</text>'
+            f'<text x="237.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.45">{_escapar_xml(_truncar_texto(it["detalles"], 105.5, 2.45))}</text>'
         )
         svg.append(
             f'<text x="381.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6" text-anchor="end">{it["masa_g"]:.1f}</text>'
