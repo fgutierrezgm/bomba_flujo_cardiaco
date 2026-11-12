@@ -693,19 +693,28 @@ def acotar_detalles_y_roscas_corte_iram(
             except Exception:
                 pass
 
-    def _lugar_libre(x_pref, y_pref, lado_izq):
+    def _lugar_libre(x_pref, y_pref, lado_izq, label_len=8):
+        # Las cotas DistanceY están rotadas 90°: ~6 mm de ancho en X y ~(label_len * 2.2) mm de alto en Y
+        alto_txt = max(14.0, label_len * 2.2)
         x_cand = x_pref
         if not lado_izq and x_cand >= rx0_rel - 4.0 and y_pref <= ry1_rel + 4.0:
             x_cand = max(dx_min_s + 9.0, xmin - 16.5)
             lado_izq = True
         x_cand = max(dx_min_s + 9.0, min(dx_max_s - 9.0, x_cand))
         y_base = max(ymin + 1.0, min(ymax - 0.5, y_pref))
-        for delta in (0.0, 5.5, -5.5, 11.0, -11.0, 16.5):
-            yc = max(ymin + 0.8, min(dy_max_s - 4.0, y_base + delta))
-            if not lado_izq and x_cand >= rx0_rel - 4.0 and yc <= ry1_rel + 4.0:
-                continue
-            if all(math.hypot(x_cand - ox, yc - oy) >= 6.2 for ox, oy in pos_ocupadas):
-                return x_cand, yc
+        for dx_step in (0.0, -9.0 if lado_izq else 9.0, -18.0 if lado_izq else 18.0):
+            xc = max(dx_min_s + 9.0, min(dx_max_s - 9.0, x_cand + dx_step))
+            for delta in (0.0, 8.0, -8.0, 16.0, -16.0):
+                yc = max(ymin + 0.8, min(dy_max_s - 4.0, y_base + delta))
+                if not lado_izq and xc >= rx0_rel - 4.0 and yc <= ry1_rel + 4.0:
+                    continue
+                colision = False
+                for ox, oy in pos_ocupadas:
+                    if abs(xc - ox) < 6.5 and abs(yc - oy) < alto_txt:
+                        colision = True
+                        break
+                if not colision:
+                    return xc, yc
         return None
 
     cotas_nuevas = []
@@ -738,6 +747,11 @@ def acotar_detalles_y_roscas_corte_iram(
                 pares_rosca.append((idx_a, idx_b, xa, xb, ya0, ya1, match_rosca))
                 break
 
+    # En cortes bajos (< 26 mm en papel) NO apilar cotas de rosca en el corte general
+    # (se llevan a una Vista de Detalle ampliada 2:1); solo dibujar las líneas cosméticas.
+    h_corte_papel = ymax - ymin
+    permitir_cotas_en_corte = h_corte_papel >= 26.0
+
     for idx_a, idx_b, xa, xb, y0, y1, (clave, d_mecha, d_nom, etiq, len_real) in pares_rosca:
         x_mid = 0.5 * (xa + xb)
         r_nom = 0.5 * d_nom * escala
@@ -769,10 +783,10 @@ def acotar_detalles_y_roscas_corte_iram(
             pass
 
         clave_prof = (etiq, round(len_real, 2))
-        if clave_prof not in prof_acotadas and len(cotas_nuevas) < 4:
+        if permitir_cotas_en_corte and clave_prof not in prof_acotadas and len(cotas_nuevas) < 2:
             lado_izq = x_mid < cx_vista
             x_pref = (xmin - 16.5) if lado_izq else (xmax + 16.5)
-            pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq)
+            pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq, label_len=len(f"{etiq} prof. {len_real:.2f}"))
             if pos is not None:
                 dim_r = doc.addObject(
                     "TechDraw::DrawViewDimension",
@@ -788,10 +802,10 @@ def acotar_detalles_y_roscas_corte_iram(
                 pos_ocupadas.append(pos)
                 prof_acotadas.add(clave_prof)
 
-    # 2. Acotar hasta 2 profundidades internas relevantes (cavidades, alojamientos, ranuras)
+    # 2. Acotar hasta 1 profundidad interna relevante solo si el corte tiene altura suficiente
     n_int = 0
     for val_mm, alias in profs_internas:
-        if n_int >= 2:
+        if not permitir_cotas_en_corte or n_int >= 1:
             break
         if any(abs(val_mm - ae) <= 0.3 for ae in alt_existentes):
             continue
@@ -808,7 +822,7 @@ def acotar_detalles_y_roscas_corte_iram(
         idx_e, _, xe, y0, y1 = cand[0]
         lado_izq = xe < cx_vista
         x_pref = (xmin - 16.5) if lado_izq else (xmax + 16.5)
-        pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq)
+        pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq, label_len=6)
         if pos is not None:
             dim_i = doc.addObject(
                 "TechDraw::DrawViewDimension",
@@ -826,6 +840,192 @@ def acotar_detalles_y_roscas_corte_iram(
             n_int += 1
 
     return cotas_nuevas
+
+
+def crear_vista_detalle_roscas_iram(
+    doc,
+    page,
+    vista_corte,
+    prefijo_nombre,
+    filas_param,
+    anchor_point,
+    x_detalle,
+    y_detalle,
+    radio_corte=9.5,
+    escala_detalle=2.0,
+    ref_letra="A",
+):
+    """
+    Crea una Vista de Detalle ampliada (`TechDraw::DrawViewDetail`, p.ej. Detalle A 2:1)
+    a partir de `vista_corte`, dibuja líneas cosméticas de rosca IRAM 4502 en su interior
+    y coloca cotas de profundidad de roscas y cavidades bien separadas (una por lado, sin solapes).
+    """
+    det = doc.addObject("TechDraw::DrawViewDetail", f"{prefijo_nombre}_Detalle_{ref_letra}")
+    page.addView(det)
+    det.BaseView = vista_corte
+    det.AnchorPoint = anchor_point
+    det.Radius = radio_corte
+    det.ScaleType = "Custom"
+    det.Scale = escala_detalle
+    det.Reference = ref_letra
+    det.X = x_detalle
+    det.Y = y_detalle
+    det.Caption = f"Detalle {ref_letra} (Escala {escala_detalle:.0f}:1)"
+    estilizar_vista_iram(det, mostrar_ocultas=False, mostrar_centros=False)
+    doc.recompute()
+
+    try:
+        edges = det.getVisibleEdges()
+    except Exception:
+        return det, []
+    if not edges:
+        return det, []
+
+    r_papel = radio_corte * escala_detalle
+    escala = float(getattr(det, "Scale", escala_detalle) or escala_detalle)
+
+    # Identificar roscas y profundidades desde Parametros
+    TABLA_ROSCAS = [
+        ("m3", 2.5, 3.0, "M3"),
+        ("m4", 3.3, 4.0, "M4"),
+        ("m5", 4.2, 5.0, "M5"),
+        ("m6", 5.0, 6.0, "M6"),
+        ("m8", 6.8, 8.0, "M8"),
+        ("m10", 8.5, 10.0, "M10"),
+        ("m12", 11.0, 12.0, "M12"),
+        ("m14", 12.0, 14.0, "M14"),
+        ("g18", 8.8, 9.73, "G1/8"),
+    ]
+    roscas_pieza = []
+    profs_internas = []
+    for alias, val_str, desc in (filas_param or []):
+        al_l = str(alias).lower()
+        desc_l = str(desc).lower()
+        val_mm = _extraer_mm(val_str)
+        if val_mm is None or val_mm <= 0.2:
+            continue
+        if al_l.startswith("d_"):
+            for clave, d_def, d_nom, etiq in TABLA_ROSCAS:
+                if clave in al_l or clave in desc_l or (clave == "g18" and "g 1/8" in desc_l):
+                    roscas_pieza.append((clave, val_mm if abs(val_mm - d_def) < 1.2 else d_def, d_nom, etiq))
+                    break
+        elif al_l.startswith(("p_cav", "p_reb", "p_caj", "p_aloj", "p_reten", "p_esc", "a_ran")):
+            profs_internas.append(val_mm)
+
+    aristas_vert = []
+    aristas_horiz = []
+    for idx, e in enumerate(edges):
+        bb = e.BoundBox
+        curva = getattr(e, "Curve", None)
+        if curva and curva.TypeId == "Part::GeomLine" and e.Length >= 1.5:
+            dx = abs(bb.XMax - bb.XMin)
+            dy = abs(bb.YMax - bb.YMin)
+            if dx < 0.05 and dy >= 1.5:
+                aristas_vert.append((idx, dy, 0.5 * (bb.XMin + bb.XMax), bb.YMin, bb.YMax))
+            elif dy < 0.05 and dx >= 1.5:
+                aristas_horiz.append((idx, dx, 0.5 * (bb.YMin + bb.YMax), bb.XMin, bb.XMax))
+
+    cotas_det = []
+    rosca_izq = None
+    rosca_der = None
+
+    # Detectar pares roscados dentro del Detalle
+    usados = set()
+    for i in range(len(aristas_vert)):
+        if i in usados:
+            continue
+        idx_a, len_a, xa, ya0, ya1 = aristas_vert[i]
+        for j in range(i + 1, len(aristas_vert)):
+            if j in usados:
+                continue
+            idx_b, len_b, xb, yb0, yb1 = aristas_vert[j]
+            if abs(ya0 - yb0) > 0.3 or abs(ya1 - yb1) > 0.3:
+                continue
+            sep_real = abs(xa - xb) / escala
+            len_real = 0.5 * (len_a + len_b) / escala
+            for clave, d_mecha, d_nom, etiq in roscas_pieza:
+                if abs(sep_real - d_mecha) <= 0.25 and len_real >= 2.0:
+                    usados.add(i)
+                    usados.add(j)
+                    x_mid = 0.5 * (xa + xb)
+                    r_nom = 0.5 * d_nom * escala
+                    try:
+                        det.makeCosmeticLine(
+                            App.Vector(x_mid - r_nom, ya0, 0),
+                            App.Vector(x_mid - r_nom, ya1, 0),
+                            1, 0.20, (0.0, 0.0, 0.0, 1.0),
+                        )
+                        det.makeCosmeticLine(
+                            App.Vector(x_mid + r_nom, ya0, 0),
+                            App.Vector(x_mid + r_nom, ya1, 0),
+                            1, 0.20, (0.0, 0.0, 0.0, 1.0),
+                        )
+                        det.makeCosmeticLine(
+                            App.Vector(x_mid, ya0 - 1.2, 0),
+                            App.Vector(x_mid, ya1 + 1.2, 0),
+                            4, 0.15, (0.25, 0.25, 0.25, 1.0),
+                        )
+                    except Exception:
+                        pass
+                    item_r = (idx_a, idx_b, x_mid, ya0, ya1, etiq, len_real)
+                    if x_mid >= 0 and rosca_der is None:
+                        rosca_der = item_r
+                    elif x_mid < 0 and rosca_izq is None:
+                        rosca_izq = item_r
+                    break
+            if i in usados:
+                break
+
+    # Colocar como máximo 1 cota vertical a la DERECHA y 1 a la IZQUIERDA, más 1 horizontal ARRIBA
+    cota_rosca_principal = rosca_der or rosca_izq
+    if cota_rosca_principal is not None:
+        idx_a, idx_b, x_mid, y0, y1, etiq, len_real = cota_rosca_principal
+        dim_r = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Det{ref_letra}_Rosca")
+        page.addView(dim_r)
+        dim_r.Type = "DistanceY"
+        dim_r.MeasureType = "Projected"
+        dim_r.FormatSpec = f"{etiq} prof. %.2w"
+        dim_r.References2D = [(det, f"Edge{idx_a}")]
+        dim_r.X = r_papel + 10.0
+        dim_r.Y = max(-r_papel + 4.0, min(r_papel - 4.0, 0.5 * (y0 + y1)))
+        cotas_det.append(dim_r)
+
+        # Cota horizontal arriba del detalle indicando Ø de mecha de la rosca
+        for idx_h, dx_h, yh, xh0, xh1 in aristas_horiz:
+            if abs(xh0 - min(x_mid, xh0)) < 10.0 and abs((dx_h / escala) - 2.5) <= 1.0 and abs(yh - y1) < 0.3:
+                dim_d = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Det{ref_letra}_Diam")
+                page.addView(dim_d)
+                dim_d.Type = "DistanceX"
+                dim_d.MeasureType = "Projected"
+                dim_d.FormatSpec = f"⌀%.2w ({etiq})"
+                dim_d.References2D = [(det, f"Edge{idx_h}")]
+                dim_d.X = 0.5 * (xh0 + xh1)
+                dim_d.Y = r_papel + 7.5
+                cotas_det.append(dim_d)
+                break
+
+    # A la izquierda del detalle: 1 cota de profundidad de cavidad/escalón (sin chocar con la derecha)
+    for val_mm in profs_internas:
+        cand = [
+            (idx, len_p, x, y0, y1)
+            for idx, len_p, x, y0, y1 in aristas_vert
+            if abs((len_p / escala) - val_mm) <= 0.25
+        ]
+        if cand:
+            cand.sort(key=lambda item: item[2])
+            idx_e, _, _, y0, y1 = cand[0]
+            dim_c = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Det{ref_letra}_Cav")
+            page.addView(dim_c)
+            dim_c.Type = "DistanceY"
+            dim_c.MeasureType = "Projected"
+            dim_c.FormatSpec = "%.2w"
+            dim_c.References2D = [(det, f"Edge{idx_e}")]
+            dim_c.X = -(r_papel + 10.0)
+            dim_c.Y = max(-r_papel + 4.0, min(r_papel - 4.0, 0.5 * (y0 + y1)))
+            cotas_det.append(dim_c)
+            break
+
+    return det, cotas_det
 
 
 def _escapar_xml(texto):

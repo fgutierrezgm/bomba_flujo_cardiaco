@@ -50,6 +50,7 @@ from planos_iram import (
     acotar_vista_circular_iram,
     acotar_vista_perfil_o_corte_iram,
     asegurar_plantillas_iram,
+    crear_vista_detalle_roscas_iram,
     estilizar_vista_iram,
     generar_svg_bloque_cotas_pieza,
     generar_svg_tabla_bom_iram,
@@ -1355,7 +1356,9 @@ def main():
         h_corte = max(4.0, bb.ZLength * escala_num)
         w_corte = max(4.0, bb.XLength * escala_num)
         rx_rotulo = (W_hoja - 10.0) - 175.0
-        if (x_vistas + 0.5 * w_corte + 18.0) >= rx_rotulo:
+        if it_num == 3:
+            y_base_min = 98.0
+        elif (x_vistas + 0.5 * w_corte + 18.0) >= rx_rotulo:
             y_base_min = 64.0
         else:
             y_base_min = 14.0
@@ -1476,6 +1479,21 @@ def main():
                 formato=fmt_i,
             )
             total_cotas_geom += len(c_det)
+            if it_num == 3:
+                _, c_det_v = crear_vista_detalle_roscas_iram(
+                    doc_planos,
+                    page_p,
+                    v_sec,
+                    f"VP_{it_num:02d}",
+                    info["filas_param"],
+                    anchor_point=App.Vector(-34.5, -3.5, 0.0),
+                    x_detalle=float(v_sec.X.Value),
+                    y_detalle=54.0,
+                    radio_corte=9.5,
+                    escala_detalle=2.0,
+                    ref_letra="A",
+                )
+                total_cotas_geom += len(c_det_v)
 
     doc_planos.recompute()
     doc_planos.saveAs(RUTA_SALIDA_FCSTD)
