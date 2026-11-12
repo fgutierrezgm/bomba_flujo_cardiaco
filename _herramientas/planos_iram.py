@@ -589,6 +589,245 @@ def acotar_vista_perfil_o_corte_iram(
     return cotas
 
 
+def _extraer_mm(val_str):
+    import re as _re
+    m = _re.search(r"[-+]?\d+(?:\.\d+)?", str(val_str or ""))
+    return float(m.group(0)) if m else None
+
+
+def acotar_detalles_y_roscas_corte_iram(
+    doc,
+    page,
+    vista,
+    prefijo_nombre,
+    filas_param,
+    cotas_existentes=None,
+    formato="A3",
+):
+    """
+    Complementa la vista de corte A-A según IRAM 4502 / ISO 6410-1:
+    1. Dibuja líneas cosméticas de rosca (flancos al diámetro nominal exterior, línea de fin
+       de rosca útil y eje trazo-punto) en los agujeros roscados visibles en el corte.
+    2. Acota visualmente la profundidad de las roscas (`M3 prof. ...`, `M8 prof. ...`, etc.)
+       y profundidades internas clave (cavidades, alojamientos, ranuras) evitando solapes.
+    """
+    try:
+        edges = vista.getVisibleEdges()
+    except Exception:
+        return []
+    if not edges or not filas_param:
+        return []
+
+    escala = float(getattr(vista, "Scale", 1.0) or 1.0)
+    ext = _indices_extremos_vertices_2d(vista)
+    if ext is not None:
+        _, _, _, _, xmin, ymin, xmax, ymax, _ = ext
+    else:
+        xmin, ymin, xmax, ymax = _limites_aristas_2d(edges)
+    cx_vista = 0.5 * (xmin + xmax)
+    dx_min_s, dx_max_s, dy_min_s, dy_max_s = _limites_seguros_hoja(vista, formato=formato)
+
+    vx = float(vista.X.Value)
+    vy = float(vista.Y.Value)
+    W_hoja, _ = FORMATOS_IRAM.get(formato, FORMATOS_IRAM["A3"])
+    rx0_rel = (W_hoja - 10.0) - 175.0 - vx
+    ry1_rel = 61.0 - vy
+
+    # Catálogo estándar rosca -> (d_mecha_aprox, D_nominal, etiqueta)
+    TABLA_ROSCAS = [
+        ("m3", 2.5, 3.0, "M3"),
+        ("m4", 3.3, 4.0, "M4"),
+        ("m5", 4.2, 5.0, "M5"),
+        ("m6", 5.0, 6.0, "M6"),
+        ("m8", 6.8, 8.0, "M8"),
+        ("m10", 8.5, 10.0, "M10"),
+        ("m12", 11.0, 12.0, "M12"),
+        ("m14", 12.0, 14.0, "M14"),
+        ("g18", 8.8, 9.73, "G1/8"),
+    ]
+
+    roscas_pieza = []
+    profs_rosca = []
+    profs_internas = []
+    for alias, val_str, desc in filas_param:
+        al_l = str(alias).lower()
+        desc_l = str(desc).lower()
+        val_mm = _extraer_mm(val_str)
+        if val_mm is None or val_mm <= 0.2:
+            continue
+        if al_l.startswith("d_"):
+            for clave, d_def, d_nom, etiq in TABLA_ROSCAS:
+                if clave in al_l or clave in desc_l or (clave == "g18" and "g 1/8" in desc_l):
+                    roscas_pieza.append((clave, val_mm if abs(val_mm - d_def) < 1.2 else d_def, d_nom, etiq))
+                    break
+        if al_l.startswith(("p_m", "p_g18", "p_rosca", "l_rosca")):
+            tag = ""
+            for clave, _, _, etiq in TABLA_ROSCAS:
+                if clave in al_l or clave in desc_l:
+                    tag = etiq
+                    break
+            profs_rosca.append((val_mm, tag))
+        elif al_l.startswith(("p_cav", "p_reb", "p_caj", "p_aloj", "p_reten", "p_esc", "a_ran")):
+            profs_internas.append((val_mm, alias))
+
+    # Recopilar aristas verticales y horizontales
+    aristas_vert = []
+    aristas_horiz = []
+    for idx, e in enumerate(edges):
+        bb = e.BoundBox
+        curva = getattr(e, "Curve", None)
+        if curva and curva.TypeId == "Part::GeomLine" and e.Length >= 1.2:
+            dx = abs(bb.XMax - bb.XMin)
+            dy = abs(bb.YMax - bb.YMin)
+            if dx < 0.05 and dy >= 1.2:
+                aristas_vert.append((idx, dy, 0.5 * (bb.XMin + bb.XMax), bb.YMin, bb.YMax))
+            elif dy < 0.05 and dx >= 1.2:
+                aristas_horiz.append((idx, dx, 0.5 * (bb.YMin + bb.YMax), bb.XMin, bb.XMax))
+
+    pos_ocupadas = [(float(c.X.Value), float(c.Y.Value)) for c in (cotas_existentes or [])]
+    alt_existentes = []
+    for c in (cotas_existentes or []):
+        if getattr(c, "Type", "") == "DistanceY":
+            try:
+                alt_existentes.append(float(c.NominalValue))
+            except Exception:
+                pass
+
+    def _lugar_libre(x_pref, y_pref, lado_izq):
+        x_cand = x_pref
+        if not lado_izq and x_cand >= rx0_rel - 4.0 and y_pref <= ry1_rel + 4.0:
+            x_cand = max(dx_min_s + 9.0, xmin - 16.5)
+            lado_izq = True
+        x_cand = max(dx_min_s + 9.0, min(dx_max_s - 9.0, x_cand))
+        y_base = max(ymin + 1.0, min(ymax - 0.5, y_pref))
+        for delta in (0.0, 5.5, -5.5, 11.0, -11.0, 16.5):
+            yc = max(ymin + 0.8, min(dy_max_s - 4.0, y_base + delta))
+            if not lado_izq and x_cand >= rx0_rel - 4.0 and yc <= ry1_rel + 4.0:
+                continue
+            if all(math.hypot(x_cand - ox, yc - oy) >= 6.2 for ox, oy in pos_ocupadas):
+                return x_cand, yc
+        return None
+
+    cotas_nuevas = []
+    prof_acotadas = set()
+
+    # 1. Detectar pares de aristas verticales paralelas correspondientes a agujeros roscados
+    usados = set()
+    pares_rosca = []
+    for i in range(len(aristas_vert)):
+        if i in usados:
+            continue
+        idx_a, len_a, xa, ya0, ya1 = aristas_vert[i]
+        for j in range(i + 1, len(aristas_vert)):
+            if j in usados:
+                continue
+            idx_b, len_b, xb, yb0, yb1 = aristas_vert[j]
+            if abs(ya0 - yb0) > 0.25 or abs(ya1 - yb1) > 0.25:
+                continue
+            sep_real = abs(xa - xb) / escala
+            len_real = 0.5 * (len_a + len_b) / escala
+            match_rosca = None
+            for clave, d_mecha, d_nom, etiq in roscas_pieza:
+                if abs(sep_real - d_mecha) <= 0.22:
+                    if any(abs(len_real - pr) <= 0.35 and (not t or t == etiq) for pr, t in profs_rosca) or len_real >= 2.5:
+                        match_rosca = (clave, d_mecha, d_nom, etiq, len_real)
+                        break
+            if match_rosca:
+                usados.add(i)
+                usados.add(j)
+                pares_rosca.append((idx_a, idx_b, xa, xb, ya0, ya1, match_rosca))
+                break
+
+    for idx_a, idx_b, xa, xb, y0, y1, (clave, d_mecha, d_nom, etiq, len_real) in pares_rosca:
+        x_mid = 0.5 * (xa + xb)
+        r_nom = 0.5 * d_nom * escala
+        try:
+            vista.makeCosmeticLine(
+                App.Vector(x_mid - r_nom, y0, 0),
+                App.Vector(x_mid - r_nom, y1, 0),
+                1, 0.18, (0.0, 0.0, 0.0, 1.0),
+            )
+            vista.makeCosmeticLine(
+                App.Vector(x_mid + r_nom, y0, 0),
+                App.Vector(x_mid + r_nom, y1, 0),
+                1, 0.18, (0.0, 0.0, 0.0, 1.0),
+            )
+            vista.makeCosmeticLine(
+                App.Vector(x_mid, y0 - 0.8, 0),
+                App.Vector(x_mid, y1 + 0.8, 0),
+                4, 0.15, (0.25, 0.25, 0.25, 1.0),
+            )
+            for _, dx_h, yh, xh0, xh1 in aristas_horiz:
+                if xh0 <= x_mid <= xh1 and dx_h <= (d_mecha * escala + 0.6):
+                    if abs(yh - y0) < 0.2 or abs(yh - y1) < 0.2:
+                        vista.makeCosmeticLine(
+                            App.Vector(x_mid - r_nom, yh, 0),
+                            App.Vector(x_mid + r_nom, yh, 0),
+                            1, 0.18, (0.0, 0.0, 0.0, 1.0),
+                        )
+        except Exception:
+            pass
+
+        clave_prof = (etiq, round(len_real, 2))
+        if clave_prof not in prof_acotadas and len(cotas_nuevas) < 4:
+            lado_izq = x_mid < cx_vista
+            x_pref = (xmin - 16.5) if lado_izq else (xmax + 16.5)
+            pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq)
+            if pos is not None:
+                dim_r = doc.addObject(
+                    "TechDraw::DrawViewDimension",
+                    f"{prefijo_nombre}_Rosca_{len(cotas_nuevas) + 1}",
+                )
+                page.addView(dim_r)
+                dim_r.Type = "DistanceY"
+                dim_r.MeasureType = "Projected"
+                dim_r.FormatSpec = f"{etiq} prof. %.2w"
+                dim_r.References2D = [(vista, f"Edge{idx_a}")]
+                dim_r.X, dim_r.Y = pos
+                cotas_nuevas.append(dim_r)
+                pos_ocupadas.append(pos)
+                prof_acotadas.add(clave_prof)
+
+    # 2. Acotar hasta 2 profundidades internas relevantes (cavidades, alojamientos, ranuras)
+    n_int = 0
+    for val_mm, alias in profs_internas:
+        if n_int >= 2:
+            break
+        if any(abs(val_mm - ae) <= 0.3 for ae in alt_existentes):
+            continue
+        if any(abs(val_mm - p[1]) <= 0.3 for p in prof_acotadas):
+            continue
+        cand = [
+            (idx, len_p, x, y0, y1)
+            for idx, len_p, x, y0, y1 in aristas_vert
+            if abs((len_p / escala) - val_mm) <= 0.25
+        ]
+        if not cand:
+            continue
+        cand.sort(key=lambda item: item[2])
+        idx_e, _, xe, y0, y1 = cand[0]
+        lado_izq = xe < cx_vista
+        x_pref = (xmin - 16.5) if lado_izq else (xmax + 16.5)
+        pos = _lugar_libre(x_pref, 0.5 * (y0 + y1), lado_izq)
+        if pos is not None:
+            dim_i = doc.addObject(
+                "TechDraw::DrawViewDimension",
+                f"{prefijo_nombre}_Prof_{n_int + 1}",
+            )
+            page.addView(dim_i)
+            dim_i.Type = "DistanceY"
+            dim_i.MeasureType = "Projected"
+            dim_i.FormatSpec = "%.2w"
+            dim_i.References2D = [(vista, f"Edge{idx_e}")]
+            dim_i.X, dim_i.Y = pos
+            cotas_nuevas.append(dim_i)
+            pos_ocupadas.append(pos)
+            prof_acotadas.add((alias, round(val_mm, 2)))
+            n_int += 1
+
+    return cotas_nuevas
+
+
 def _escapar_xml(texto):
     return (
         str(texto)

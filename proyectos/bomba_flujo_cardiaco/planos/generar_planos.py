@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.join(RAIZ, "_herramientas"))
 
 from planos_iram import (
     FORMATOS_IRAM,
+    acotar_detalles_y_roscas_corte_iram,
     acotar_vista_circular_iram,
     acotar_vista_perfil_o_corte_iram,
     asegurar_plantillas_iram,
@@ -1465,6 +1466,16 @@ def main():
                 doc_planos, page_p, v_sec, f"Cota_{it_num:02d}", es_revolucion=es_rev, formato=fmt_i
             )
             total_cotas_geom += len(c_lin)
+            c_det = acotar_detalles_y_roscas_corte_iram(
+                doc_planos,
+                page_p,
+                v_sec,
+                f"Cota_{it_num:02d}",
+                info["filas_param"],
+                cotas_existentes=c_lin,
+                formato=fmt_i,
+            )
+            total_cotas_geom += len(c_det)
 
     doc_planos.recompute()
     doc_planos.saveAs(RUTA_SALIDA_FCSTD)
