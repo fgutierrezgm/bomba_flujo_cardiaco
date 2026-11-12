@@ -126,22 +126,35 @@ def generar_svg_datum_a():
     </svg>"""
 
 
-def buscar_aristas_rebajes_det_b(vista_det_b):
-    """Encuentra en Detalle B dos aristas horizontales distintas para ⌀41 y ⌀45,1."""
-    edge_41 = "Edge31"
-    edge_45 = "Edge33"
+def buscar_referencias_rebajes_det_b(vista_det_b):
+    """
+    Obtiene los pares de vértices simétricos para acotar ⌀41 (x = ±20.5 en modelo / ±41 en escala 2:1)
+    y ⌀45,1 (x = ±22.55 en modelo / ±45.1 en escala 2:1) en Detalle B sin repetir la misma arista.
+    """
+    ref_41 = [(vista_det_b, "Edge34")]
+    ref_45 = [(vista_det_b, "Edge34")]
     try:
-        edges = vista_det_b.getVisibleEdges()
-        for idx, e in enumerate(edges):
-            if abs(e.BoundBox.YLength) < 0.2:
-                ancho = e.BoundBox.XLength
-                if 28.0 <= ancho <= 32.0:
-                    edge_41 = f"Edge{idx}"
-                elif 36.0 <= ancho <= 42.0:
-                    edge_45 = f"Edge{idx}"
+        vs = vista_det_b.getVisibleVertexes()
+        izq_41, der_41 = [], []
+        izq_45, der_45 = [], []
+        for idx, v in enumerate(vs):
+            ax = abs(v.x)
+            # Soportar coordenadas de vista tanto en escala modelo (20.5 / 22.55) como papel 2:1 (41.0 / 45.1)
+            if (19.8 <= ax <= 21.2) or (39.6 <= ax <= 42.4):
+                (izq_41 if v.x < 0 else der_41).append((v.y, idx))
+            elif (21.8 <= ax <= 23.3) or (43.6 <= ax <= 46.6):
+                (izq_45 if v.x < 0 else der_45).append((v.y, idx))
+        if izq_41 and der_41:
+            izq_41.sort()
+            der_41.sort()
+            ref_41 = [(vista_det_b, f"Vertex{izq_41[0][1]}"), (vista_det_b, f"Vertex{der_41[0][1]}")]
+        if izq_45 and der_45:
+            izq_45.sort()
+            der_45.sort()
+            ref_45 = [(vista_det_b, f"Vertex{izq_45[0][1]}"), (vista_det_b, f"Vertex{der_45[0][1]}")]
     except Exception:
         pass
-    return edge_41, edge_45
+    return ref_41, ref_45
 
 
 def construir_plano_tapa_interior_16b():
@@ -181,7 +194,7 @@ def construir_plano_tapa_interior_16b():
     page.Template = tpl
 
     # -------------------------------------------------------------------------
-    # 1. VISTA SUPERIOR CIRCULAR (ISO-E: ABAJO, elevada a Y=114.0 para despejar cuadro de notas)
+    # 1. VISTA SUPERIOR CIRCULAR (ISO-E: ABAJO, en Y=114.0)
     # -------------------------------------------------------------------------
     v_planta = doc_plano.addObject("TechDraw::DrawViewPart", "VP_03_Planta")
     page.addView(v_planta)
@@ -208,7 +221,7 @@ def construir_plano_tapa_interior_16b():
     v_corte.XDirection = App.Vector(1.0, 0.0, 0.0)
     v_corte.SectionDirection = "Up"
     v_corte.SectionSymbol = "A"
-    v_corte.SectionLineStretch = 6.0
+    v_corte.SectionLineStretch = 1.0  # Factor 1.0 normalizado (evita la línea de 500 mm y la 'A' en X=380)
     v_corte.ScaleType = "Custom"
     v_corte.Scale = 0.5
     v_corte.X = 130.0
@@ -230,13 +243,13 @@ def construir_plano_tapa_interior_16b():
         ann.Y = y
         return ann
 
-    # Título arriba del corte y letras A y B por encima de la pieza sin tocar contornos ni cotas
+    # Título arriba del corte y letras A y B junto a sus círculos de detalle en v_corte
     agregar_texto("Txt_Titulo_Corte", ["SECCIÓN A - A"], 130.0, 238.0, 4.0)
-    agregar_texto("Txt_Ref_DetA", ["A"], 166.0, 230.0, 3.5)
-    agregar_texto("Txt_Ref_DetB", ["B"], 140.0, 231.0, 3.5)
+    agregar_texto("Txt_Ref_DetA", ["A"], 156.0, 226.5, 3.5)
+    agregar_texto("Txt_Ref_DetB", ["B"], 141.0, 231.5, 3.5)
 
     # -------------------------------------------------------------------------
-    # 3. DETALLE A (2:1): ESCALÓN EXTERIOR Y ROSCA M3 (Radio en hoja = 18.0 mm)
+    # 3. DETALLE A (2:1): ESCALÓN Y ROSCA M3 (Radio modelo = 9.0 -> Radio hoja = 18.0 mm)
     # -------------------------------------------------------------------------
     det_a = doc_plano.addObject("TechDraw::DrawViewDetail", "VP_03_Detalle_A")
     page.addView(det_a)
@@ -250,12 +263,12 @@ def construir_plano_tapa_interior_16b():
     det_a.Reference = "A"
     det_a.Caption = ""
     det_a.ShowHighlight = False
-    det_a.ShowMatting = True
+    det_a.ShowMatting = False  # Desactivado para usar un único aro fino IRAM 4502
     estilizar_vista_iram(det_a, mostrar_ocultas=False, mostrar_centros=False)
-    agregar_texto("Txt_Titulo_DetA", ["DETALLE A (2:1)"], 258.0, 94.0, 3.5)
+    agregar_texto("Txt_Titulo_DetA", ["DETALLE A (2:1)"], 258.0, 91.0, 3.5)
 
     # -------------------------------------------------------------------------
-    # 4. DETALLE B (2:1): ZONA CENTRAL Y REBAJES TRASEROS (Radio en hoja = 21.0 mm)
+    # 4. DETALLE B (2:1): ZONA CENTRAL Y REBAJES (Radio modelo = 10.5 -> Radio hoja = 21.0 mm)
     # -------------------------------------------------------------------------
     det_b = doc_plano.addObject("TechDraw::DrawViewDetail", "VP_03_Detalle_B")
     page.addView(det_b)
@@ -269,9 +282,9 @@ def construir_plano_tapa_interior_16b():
     det_b.Reference = "B"
     det_b.Caption = ""
     det_b.ShowHighlight = False
-    det_b.ShowMatting = True
+    det_b.ShowMatting = False  # Desactivado para usar un único aro fino IRAM 4502
     estilizar_vista_iram(det_b, mostrar_ocultas=False, mostrar_centros=False)
-    agregar_texto("Txt_Titulo_DetB", ["DETALLE B (2:1)"], 352.0, 94.0, 3.5)
+    agregar_texto("Txt_Titulo_DetB", ["DETALLE B (2:1)"], 352.0, 91.0, 3.5)
 
     # -------------------------------------------------------------------------
     # 5. PERSPECTIVA ISOMÉTRICA 3D
@@ -296,7 +309,6 @@ def construir_plano_tapa_interior_16b():
     sym_notas.X = 130.0
     sym_notas.Y = 36.0
 
-    # Símbolo Datum A colocado a la derecha de la cota '30' (X=216.0), sin pisar ninguna línea
     sym_datum = doc_plano.addObject("TechDraw::DrawViewSymbol", "VP_03_Datum_A")
     page.addView(sym_datum)
     sym_datum.Symbol = generar_svg_datum_a()
@@ -307,40 +319,34 @@ def construir_plano_tapa_interior_16b():
 
     # -------------------------------------------------------------------------
     # 7. EJES DE SIMETRÍA, LÍNEAS DE CENTRO Y CÍRCULOS DE DETALLE
+    # (Nota: makeCosmetic* multiplica por vista.Scale, por lo que se pasan en escala modelo)
     # -------------------------------------------------------------------------
-    v_planta.makeCosmeticLine(App.Vector(-45.0, 0.0, 0.0), App.Vector(45.0, 0.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticLine(App.Vector(0.0, -45.0, 0.0), App.Vector(0.0, 45.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticLine(App.Vector(-26.0, -26.0, 0.0), App.Vector(26.0, 26.0, 0.0), 4, 0.18, (0.2, 0.2, 0.2, 1.0))
+    # En v_planta (Scale = 0.5):
+    v_planta.makeCosmeticLine(App.Vector(-86.0, 0.0, 0.0), App.Vector(86.0, 0.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticLine(App.Vector(0.0, -86.0, 0.0), App.Vector(0.0, 86.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticLine(App.Vector(0.0, 0.0, 0.0), App.Vector(52.0, 52.0, 0.0), 4, 0.18, (0.2, 0.2, 0.2, 1.0))
     
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 18.75, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 32.50, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 38.125, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    # Círculos primitivos de centros en coordenadas de modelo (Ø75 -> R=37.5, Ø130 -> R=65.0, Ø152.5 -> R=76.25)
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 37.50, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 65.00, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 76.25, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
 
-    for xg in (-18.75, 18.75):
-        v_planta.makeCosmeticLine(App.Vector(xg - 3.5, 0.0, 0.0), App.Vector(xg + 3.5, 0.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-        v_planta.makeCosmeticLine(App.Vector(xg, -3.5, 0.0), App.Vector(xg, 3.5, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    for yg in (-18.75, 18.75):
-        v_planta.makeCosmeticLine(App.Vector(-3.5, yg, 0.0), App.Vector(3.5, yg, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-        v_planta.makeCosmeticLine(App.Vector(0.0, yg - 3.5, 0.0), App.Vector(0.0, yg + 3.5, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    # Arco de cota angular de 45° en v_planta (R_modelo = 48.0 -> R_hoja = 24.0 mm)
+    v_planta.makeCosmeticCircleArc(App.Vector(0.0, 0.0, 0.0), 48.0, 0.0, 45.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
 
-    # Arco de cota angular de 45° en v_planta
-    v_planta.makeCosmeticCircleArc(App.Vector(0.0, 0.0, 0.0), 24.0, 0.0, 45.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticLine(App.Vector(24.0, 0.0, 0.0), App.Vector(25.5, 1.2, 0.0), 1, 0.25, (0.0, 0.0, 0.0, 1.0))
-    v_planta.makeCosmeticLine(App.Vector(24.0 * math.cos(math.radians(45)), 24.0 * math.sin(math.radians(45)), 0.0),
-                              App.Vector(22.5 * math.cos(math.radians(43)), 22.5 * math.sin(math.radians(43)), 0.0), 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+    # En v_corte (Scale = 0.5):
+    v_corte.makeCosmeticLine(App.Vector(0.0, -19.0, 0.0), App.Vector(0.0, 19.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
+    v_corte.makeCosmeticLine(App.Vector(-37.5, -17.0, 0.0), App.Vector(-37.5, 17.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    v_corte.makeCosmeticLine(App.Vector(37.5, -17.0, 0.0), App.Vector(37.5, 17.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    # Extensión de línea base inferior (y_modelo = -15.0 -> y_hoja = 212.5) hasta Datum A (x_hoja = 216.0)
+    v_corte.makeCosmeticLine(App.Vector(80.0, -15.0, 0.0), App.Vector(180.0, -15.0, 0.0), 1, 0.20, (0.0, 0.0, 0.0, 1.0))
 
-    # Ejes en Corte A-A y línea auxiliar extendida hasta X_local=92.0 para apoyar Datum A en X_hoja=216.0
-    v_corte.makeCosmeticLine(App.Vector(0.0, -11.0, 0.0), App.Vector(0.0, 11.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
-    v_corte.makeCosmeticLine(App.Vector(-18.75, -8.0, 0.0), App.Vector(-18.75, 8.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_corte.makeCosmeticLine(App.Vector(18.75, -8.0, 0.0), App.Vector(18.75, 8.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_corte.makeCosmeticLine(App.Vector(40.0, -7.5, 0.0), App.Vector(92.0, -7.5, 0.0), 1, 0.20, (0.0, 0.0, 0.0, 1.0))
-
-    # Círculos de detalle finos en v_corte y aros de recorte en det_a y det_b
-    v_corte.makeCosmeticCircle(App.Vector(36.0, -5.0, 0.0), 9.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
-    v_corte.makeCosmeticCircle(App.Vector(0.0, 3.5, 0.0), 10.5, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
-    det_a.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 18.0, 1, 0.22, (0.0, 0.0, 0.0, 1.0))
-    det_b.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 21.0, 1, 0.22, (0.0, 0.0, 0.0, 1.0))
-    det_b.makeCosmeticLine(App.Vector(0.0, -10.0, 0.0), App.Vector(0.0, 10.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
+    # Círculos de detalle en v_corte y aros finos de recorte en det_a (R_modelo=9.0) y det_b (R_modelo=10.5)
+    v_corte.makeCosmeticCircle(App.Vector(36.0, -5.0, 0.0), 18.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    v_corte.makeCosmeticCircle(App.Vector(0.0, 3.5, 0.0), 21.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    det_a.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 9.0, 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+    det_b.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 10.5, 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+    det_b.makeCosmeticLine(App.Vector(0.0, -9.5, 0.0), App.Vector(0.0, 9.5, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
 
     def agregar_cota(nombre, tipo, refs, fmt, x, y):
         try:
@@ -378,42 +384,38 @@ def construir_plano_tapa_interior_16b():
     agregar_cota("Cota_03_Prof_Cav1", "DistanceY", [(v_corte, "Vertex18"), (v_corte, "Vertex19")], "6,9", -56.0, -5.77)
     agregar_cota("Cota_03_Prof_Cav2", "DistanceY", [(v_corte, "Vertex20"), (v_corte, "Vertex21")], "8,1", -64.0, -2.02)
 
-    # Desplazadas +6 mm a la derecha (X = 54 a 78) para despejar el borde de la pieza
     agregar_cota("Cota_03_Prof_Reb1", "DistanceY", [(v_corte, "Vertex53"), (v_corte, "Vertex6")],  "2,31", 54.0, 6.92)
     agregar_cota("Cota_03_Prof_Reb2", "DistanceY", [(v_corte, "Vertex6"),  (v_corte, "Vertex59")], "12,0", 62.0, 4.50)
     agregar_cota("Cota_03_Alt_Base",  "DistanceY", [(v_corte, "Vertex2"),  (v_corte, "Vertex3")],  "25,5", 70.0, 1.12)
     agregar_cota("Cota_03_Alt_Total", "DistanceY", [(v_corte, "Vertex2"),  (v_corte, "Vertex49")], "30",   78.0, 0.0)
 
     # -------------------------------------------------------------------------
-    # 9. COTAS DE LA VISTA CIRCULAR INFERIOR (Radio exterior = 40.0 mm)
+    # 9. COTAS DE LA VISTA CIRCULAR INFERIOR (Radio exterior en hoja = 40.0 mm)
     # -------------------------------------------------------------------------
     agregar_cota("Cota_03_PCD_CorMed", "DistanceX", [(v_planta, "Vertex81"), (v_planta, "Vertex78")], "6x M3 en ⌀130 prof. 4",   0.0,  47.0)
     agregar_cota("Cota_03_PCD_CorExt", "DistanceX", [(v_planta, "Vertex11"), (v_planta, "Vertex17")], "6x M3 en ⌀152,5 prof. 6", 0.0,  55.0)
     agregar_cota("Cota_03_PCD_Guias",  "DistanceX", [(v_planta, "Vertex23"), (v_planta, "Vertex26")], "⌀75",                     0.0, -45.0)
 
-    # Edge7 está a la derecha (X=+18.75): sacamos la directriz hacia abajo a la derecha (X=+52, Y=-18)
     agregar_cota("Cota_03_Guia_Paso",   "Diameter", [(v_planta, "Edge7")],  "2x ⌀10,1 H7",      52.0, -18.0)
-    # Edge23 hacia abajo a la izquierda sin cruzar las cotas horizontales superiores
     agregar_cota("Cota_03_Puertos_G18", "Diameter", [(v_planta, "Edge23")], "2x G 1/8 prof. 8", -52.0, -26.0)
-    agregar_cota("Cota_03_Puerto_M12",  "Diameter", [(v_planta, "Edge9")],  "M12x1 (a 45°)",     48.0,  32.0)
-    # Etiqueta angular fuera del cajeado derecho
-    agregar_texto("Txt_Ang_45", ["45°"], 158.0, 126.0, 3.5)
+    agregar_cota("Cota_03_Puerto_M12",  "Diameter", [(v_planta, "Edge9")],  "M12x1 (a 45°)",     44.0,  26.0)
+    agregar_texto("Txt_Ang_45", ["45°"], 157.0, 123.5, 3.5)
 
     # -------------------------------------------------------------------------
-    # 10. COTAS DE DETALLE A (2:1) - Radio círculo = 18.0 mm
+    # 10. COTAS DE DETALLE A (2:1) - Radio círculo en hoja = 18.0 mm
     # -------------------------------------------------------------------------
     agregar_cota("Cota_DetA_Alt_Enc",  "DistanceY", [(det_a, "Edge24")], "4,5",  23.0,  0.0)
-    agregar_cota("Cota_DetA_Prof_M3",  "DistanceY", [(det_a, "Edge26")], "4",   -22.0, -4.0)
+    agregar_cota("Cota_DetA_Prof_M3",  "DistanceY", [(det_a, "Edge26")], "4",   -26.0,  0.0)
     agregar_texto("Txt_DetA_Rosca_M3", ["M3 prof. 4 (mecha ⌀2,5)"], 258.0, 165.0, 3.2)
 
     # -------------------------------------------------------------------------
-    # 11. COTAS DE DETALLE B (2:1) - Radio círculo = 21.0 mm
+    # 11. COTAS DE DETALLE B (2:1) - Radio círculo en hoja = 21.0 mm
     # -------------------------------------------------------------------------
-    edge_41, edge_45 = buscar_aristas_rebajes_det_b(det_b)
-    agregar_cota("Cota_DetB_Esp_Tabique",  "DistanceY", [(det_b, "Edge30")], "3",     -25.0,   6.0)
-    agregar_cota("Cota_DetB_Diam_Central", "DistanceX", [(det_b, "Edge27")], "⌀15 H7",  0.0,  15.0)
-    agregar_cota("Cota_DetB_Diam_Reb2",    "DistanceX", [(det_b, edge_41)],  "⌀41",     0.0, -23.0)
-    agregar_cota("Cota_DetB_Diam_Reb1",    "DistanceX", [(det_b, edge_45)],  "⌀45,1",   0.0, -30.5)
+    ref_41, ref_45 = buscar_referencias_rebajes_det_b(det_b)
+    agregar_cota("Cota_DetB_Esp_Tabique",  "DistanceY", [(det_b, "Edge30")], "3",     -26.0,   5.0)
+    agregar_cota("Cota_DetB_Diam_Central", "DistanceX", [(det_b, "Edge27")], "⌀15 H7",  0.0,  26.0)
+    agregar_cota("Cota_DetB_Diam_Reb2",    "DistanceX", ref_41,              "⌀41",     0.0, -25.0)
+    agregar_cota("Cota_DetB_Diam_Reb1",    "DistanceX", ref_45,              "⌀45,1",   0.0, -33.5)
 
     # -------------------------------------------------------------------------
     # 12. CAMPOS DEL RÓTULO IRAM 4508
