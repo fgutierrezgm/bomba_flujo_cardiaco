@@ -847,7 +847,7 @@ def main():
         rotulo_00a,
     )
 
-    # Vista Frontal longitudinal (eje Z horizontal o vertical; ponemos eje Z vertical e X horizontal)
+    # Vista Frontal longitudinal (eje Z vertical e X horizontal)
     v_arm_frente = doc_planos.addObject("TechDraw::DrawViewPart", "V00a_Frente")
     page_00a.addView(v_arm_frente)
     v_arm_frente.Source = [obj_armado]
@@ -856,7 +856,7 @@ def main():
     v_arm_frente.ScaleType = "Custom"
     v_arm_frente.Scale = 0.5
     v_arm_frente.X = 120.0
-    v_arm_frente.Y = 215.0
+    v_arm_frente.Y = 210.0
     v_arm_frente.Caption = "Vista Frontal Exterior (Escala 1:2)"
     estilizar_vista_iram(v_arm_frente, mostrar_ocultas=False, mostrar_centros=True)
 
@@ -872,7 +872,7 @@ def main():
     v_arm_corte.ScaleType = "Custom"
     v_arm_corte.Scale = 0.5
     v_arm_corte.X = 285.0
-    v_arm_corte.Y = 215.0
+    v_arm_corte.Y = 210.0
     v_arm_corte.Caption = "Corte Longitudinal A-A (Carrera máx. pistón = 200 mm)"
     estilizar_vista_iram(v_arm_corte, mostrar_ocultas=False, mostrar_centros=True)
 
@@ -885,7 +885,7 @@ def main():
     v_arm_iso.ScaleType = "Custom"
     v_arm_iso.Scale = 0.5
     v_arm_iso.X = 465.0
-    v_arm_iso.Y = 250.0
+    v_arm_iso.Y = 245.0
     v_arm_iso.Caption = "Perspectiva Isométrica Armado (Escala 1:2)"
     estilizar_vista_iram(v_arm_iso, mostrar_ocultas=False, mostrar_centros=False)
 
@@ -994,7 +994,7 @@ def main():
         obj_exp_gen.ViewObject.Visibility = False
     grupo_fuentes.addObject(obj_exp_gen)
 
-    escala_exp_gen = 0.25
+    escala_exp_gen = 0.22
     v_exp_gen = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Explotada_General")
     page_00b.addView(v_exp_gen)
     v_exp_gen.Source = [obj_exp_gen]
@@ -1003,23 +1003,23 @@ def main():
     v_exp_gen.ScaleType = "Custom"
     v_exp_gen.Scale = escala_exp_gen
     v_exp_gen.X = 295.0
-    v_exp_gen.Y = 295.0
+    v_exp_gen.Y = 298.0
     v_exp_gen.Caption = "VISTA EXPLOTADA GENERAL DE LA MÁQUINA (Secuencia Longitudinal de Montaje)"
     estilizar_vista_iram(v_exp_gen, mostrar_ocultas=False, mostrar_centros=False)
 
     centro_gen = comp_exp_gen.BoundBox.Center
     globos_general = [
-        (1, -38.0, -35.0),
-        (2, -26.0, 36.0),
-        (3, -15.0, 36.0),
-        (6, 22.0, 32.0),
-        (11, 28.0, 36.0),
-        (14, 45.0, 24.0),
-        (18, -32.0, -36.0),
-        (19, -36.0, 32.0),
-        (20, -36.0, -35.0),
-        (21, 36.0, -36.0),
-        (27, -35.0, 24.0),
+        (1, -40.0, -4.0),
+        (2, -24.0, 32.0),
+        (3, 36.0, 16.0),
+        (6, 20.0, 28.0),
+        (11, 25.0, 32.0),
+        (14, 40.0, 22.0),
+        (18, -30.0, -30.0),
+        (19, -32.0, 28.0),
+        (20, -32.0, -28.0),
+        (21, 32.0, -28.0),
+        (27, -32.0, 22.0),
     ]
     for it_num, dx, dy in globos_general:
         pt3d = puntos_gen_3d.get(it_num)
@@ -1030,15 +1030,14 @@ def main():
 
     # -------------------------------------------------------------------------
     # 2.2 SUBENSAMBLAJE I: CONJUNTO DEL ÉMBOLO Y SELLADO (SECTOR INFERIOR IZQ.)
-    # Escala ampliada 1:1.3 con O-Ring, bujes, contratapa y targets magnéticos
     # -------------------------------------------------------------------------
     simb_sub1 = doc_planos.addObject("TechDraw::DrawViewSymbol", "Recuadro_Sub_Embolo")
     page_00b.addView(simb_sub1)
     simb_sub1.Symbol = generar_svg_recuadro_subensamblaje(
-        "DETALLE A: SUBENSAMBLAJE DEL ÉMBOLO Y SELLADO", "ESCALA 1:1.3", 215.0, 160.0
+        "DETALLE A: SUBENSAMBLAJE DEL ÉMBOLO Y SELLADO", "ESCALA 1:1.5", 180.0, 152.0
     )
-    simb_sub1.X = 138.0
-    simb_sub1.Y = 105.0
+    simb_sub1.X = 120.0
+    simb_sub1.Y = 96.0
 
     shapes_sub_emb = []
     puntos_sub_emb = {}
@@ -1087,7 +1086,7 @@ def main():
         obj_sub_emb.ViewObject.Visibility = False
     grupo_fuentes.addObject(obj_sub_emb)
 
-    escala_sub_emb = 0.75
+    escala_sub_emb = 0.65
     v_sub_emb = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Sub_Embolo")
     page_00b.addView(v_sub_emb)
     v_sub_emb.Source = [obj_sub_emb]
@@ -1095,19 +1094,19 @@ def main():
     v_sub_emb.XDirection = App.Vector(1, 1, 0)
     v_sub_emb.ScaleType = "Custom"
     v_sub_emb.Scale = escala_sub_emb
-    v_sub_emb.X = 138.0
-    v_sub_emb.Y = 100.0
+    v_sub_emb.X = 120.0
+    v_sub_emb.Y = 95.0
     v_sub_emb.Caption = "Subensamblaje del Émbolo (Despiece Explícito)"
     estilizar_vista_iram(v_sub_emb, mostrar_ocultas=False, mostrar_centros=False)
 
     centro_sub_emb = comp_sub_emb.BoundBox.Center
     globos_sub_emb = [
-        (7, 0.0, -35.0),
-        (25, -34.0, -22.0),
-        (8, -34.0, -28.0),
-        (10, -34.0, 24.0),
-        (9, 32.0, 28.0),
-        (24, 34.0, -26.0),
+        (7, 36.0, -8.0),
+        (25, -34.0, -16.0),
+        (8, -42.0, -8.0),
+        (10, -34.0, 20.0),
+        (9, 32.0, 22.0),
+        (24, 34.0, -20.0),
     ]
     for it_num, dx, dy in globos_sub_emb:
         pt3d = puntos_sub_emb.get(it_num)
@@ -1117,16 +1116,16 @@ def main():
             )
 
     # -------------------------------------------------------------------------
-    # 2.3 SUBENSAMBLAJE II: TRANSMISIÓN Y SELLADO DE EJE (SECTOR INFERIOR DER.)
-    # Escala ampliada 1:1.8 con rodamientos, retenes, sufrideras y pasadores
+    # 2.3 SUBENSAMBLAJE II: TRANSMISIÓN Y SELLADO DE EJE (SECTOR INFERIOR CENTRO-DER.)
+    # Posicionado a la izquierda del rótulo (X < 409) y espaciado para caber completo en la caja
     # -------------------------------------------------------------------------
     simb_sub2 = doc_planos.addObject("TechDraw::DrawViewSymbol", "Recuadro_Sub_Transmision")
     page_00b.addView(simb_sub2)
     simb_sub2.Symbol = generar_svg_recuadro_subensamblaje(
-        "DETALLE B: SISTEMA DE TRANSMISIÓN Y SELLADO", "ESCALA 1:1.8", 245.0, 160.0
+        "DETALLE B: SISTEMA DE TRANSMISIÓN Y SELLADO", "ESCALA 1:4.5", 184.0, 152.0
     )
-    simb_sub2.X = 375.0
-    simb_sub2.Y = 105.0
+    simb_sub2.X = 308.0
+    simb_sub2.Y = 96.0
 
     shapes_sub_transm = []
     puntos_sub_transm = {}
@@ -1136,60 +1135,60 @@ def main():
     puntos_sub_transm[13] = sh_transm2.BoundBox.Center
 
     sh_transm1 = datos_piezas[12]["shape"].copy()
-    sh_transm1.translate(App.Vector(0, 0, -135))
+    sh_transm1.translate(App.Vector(0, 0, -105))
     shapes_sub_transm.append(sh_transm1)
     puntos_sub_transm[12] = sh_transm1.BoundBox.Center
 
     sh_ret = datos_piezas[23]["shape"].copy()
-    sh_ret.translate(App.Vector(0, 0, -195))
+    sh_ret.translate(App.Vector(0, 0, -135))
     shapes_sub_transm.append(sh_ret)
     puntos_sub_transm[23] = sh_ret.BoundBox.Center
 
     sh_sufr_int = datos_piezas[4]["shape"].copy()
-    sh_sufr_int.translate(App.Vector(0, 0, -230))
+    sh_sufr_int.translate(App.Vector(0, 0, -160))
     shapes_sub_transm.append(sh_sufr_int)
     puntos_sub_transm[4] = sh_sufr_int.BoundBox.Center
 
     sh_tapa_sufr = datos_piezas[5]["shape"].copy()
-    sh_tapa_sufr.translate(App.Vector(0, 0, -265))
+    sh_tapa_sufr.translate(App.Vector(0, 0, -185))
     shapes_sub_transm.append(sh_tapa_sufr)
     puntos_sub_transm[5] = sh_tapa_sufr.BoundBox.Center
 
     sh_pas1 = datos_piezas[26]["shape"].copy()
-    sh_pas1.translate(App.Vector(0, -45, -35))
+    sh_pas1.translate(App.Vector(0, -32, -25))
     shapes_sub_transm.append(sh_pas1)
     puntos_sub_transm[26] = sh_pas1.BoundBox.Center
 
     sh_pas2 = datos_piezas[26]["shape"].copy()
-    sh_pas2.translate(App.Vector(0, 45, -15))
+    sh_pas2.translate(App.Vector(0, 32, -10))
     shapes_sub_transm.append(sh_pas2)
 
     sh_pas3 = datos_piezas[26]["shape"].copy()
-    sh_pas3.translate(App.Vector(45, 0, 30))
+    sh_pas3.translate(App.Vector(32, 0, 20))
     shapes_sub_transm.append(sh_pas3)
 
     sh_arod = datos_piezas[15]["shape"].copy()
-    sh_arod.translate(App.Vector(0, 0, 80))
+    sh_arod.translate(App.Vector(0, 0, 55))
     shapes_sub_transm.append(sh_arod)
     puntos_sub_transm[15] = sh_arod.BoundBox.Center
 
     sh_skf = datos_piezas[22]["shape"].copy()
-    sh_skf.translate(App.Vector(0, 0, 120))
+    sh_skf.translate(App.Vector(0, 0, 85))
     shapes_sub_transm.append(sh_skf)
     puntos_sub_transm[22] = sh_skf.BoundBox.Center
 
     sh_sufr_ext = datos_piezas[16]["shape"].copy()
-    sh_sufr_ext.translate(App.Vector(0, 0, 160))
+    sh_sufr_ext.translate(App.Vector(0, 0, 112))
     shapes_sub_transm.append(sh_sufr_ext)
     puntos_sub_transm[16] = sh_sufr_ext.BoundBox.Center
 
     sh_aeje = datos_piezas[17]["shape"].copy()
-    sh_aeje.translate(App.Vector(0, 0, 200))
+    sh_aeje.translate(App.Vector(0, 0, 140))
     shapes_sub_transm.append(sh_aeje)
     puntos_sub_transm[17] = sh_aeje.BoundBox.Center
 
     sh_hus = datos_piezas[14]["shape"].copy()
-    sh_hus.translate(App.Vector(0, 0, 270))
+    sh_hus.translate(App.Vector(0, 0, 175))
     shapes_sub_transm.append(sh_hus)
     puntos_sub_transm[14] = sh_hus.BoundBox.Center
 
@@ -1200,7 +1199,7 @@ def main():
         obj_sub_transm.ViewObject.Visibility = False
     grupo_fuentes.addObject(obj_sub_transm)
 
-    escala_sub_transm = 0.52
+    escala_sub_transm = 0.22
     v_sub_transm = doc_planos.addObject("TechDraw::DrawViewPart", "V00b_Sub_Transmision")
     page_00b.addView(v_sub_transm)
     v_sub_transm.Source = [obj_sub_transm]
@@ -1208,24 +1207,24 @@ def main():
     v_sub_transm.XDirection = App.Vector(1, 1, 0)
     v_sub_transm.ScaleType = "Custom"
     v_sub_transm.Scale = escala_sub_transm
-    v_sub_transm.X = 375.0
-    v_sub_transm.Y = 100.0
+    v_sub_transm.X = 308.0
+    v_sub_transm.Y = 96.0
     v_sub_transm.Caption = "Subensamblaje de Transmisión y Rodamientos (Despiece Explícito)"
     estilizar_vista_iram(v_sub_transm, mostrar_ocultas=False, mostrar_centros=False)
 
     centro_sub_transm = comp_sub_transm.BoundBox.Center
     globos_sub_transm = [
-        (4, -34.0, -26.0),
-        (5, -34.0, 26.0),
-        (12, -34.0, -22.0),
-        (13, 0.0, 32.0),
-        (14, 38.0, 24.0),
-        (15, 26.0, 32.0),
-        (16, 26.0, 30.0),
-        (17, 26.0, -28.0),
-        (22, 24.0, -28.0),
-        (23, -34.0, 18.0),
-        (26, -24.0, -30.0),
+        (4, -56.0, 14.0),
+        (5, -42.0, 6.0),
+        (12, -38.0, 34.0),
+        (13, 38.0, -24.0),
+        (14, 38.0, 14.0),
+        (15, 38.0, -11.0),
+        (16, 38.0, 10.0),
+        (17, 38.0, 20.0),
+        (22, 38.0, 0.0),
+        (23, -38.0, 22.0),
+        (26, -54.0, 20.0),
     ]
     for it_num, dx, dy in globos_sub_transm:
         pt3d = puntos_sub_transm.get(it_num)
@@ -1312,25 +1311,52 @@ def main():
             rotulo_p,
         )
 
-        # Posiciones de vistas adaptadas al formato (A4 vs A3) dejando el tercio derecho para Isométrica + Cuadro Técnico
+        # Cálculo dinámico de posiciones para evitar superposición de rótulo, tabla, vistas, títulos y cotas
+        n_filas_t = min(len(filas_param), 22)
+        alto_tabla_raw = 8.0 + n_filas_t * 4.2
+        alto_notas_raw = (6.0 + len(entrada["notas_taller"]) * 3.8) if entrada["notas_taller"] else 0.0
+        H_raw_tabla = alto_tabla_raw + alto_notas_raw + 2.0
+
         if formato == "A4":
-            x_vistas = 82.0
-            y_planta = 148.0
-            y_corte = 62.0
-            x_der = 225.0
-            y_iso = 165.0
-            y_tabla = 105.0
-            ancho_tabla = 96.0
-            escala_tabla = 0.78
+            x_vistas = 86.0
+            x_der = 224.0
+            ancho_tabla = 108.0
+            escala_tabla = round(min(0.82, 74.0 / max(1.0, H_raw_tabla)), 3)
         else:
-            x_vistas = 125.0
-            y_planta = 208.0
-            y_corte = 88.0
+            x_vistas = 132.0
             x_der = 322.0
-            y_iso = 232.0
-            y_tabla = 140.0
-            ancho_tabla = 145.0
-            escala_tabla = 0.95
+            ancho_tabla = 148.0
+            escala_tabla = round(min(0.95, 138.0 / max(1.0, H_raw_tabla)), 3)
+
+        H_tabla_real = H_raw_tabla * escala_tabla
+        y_tabla = 65.0 + 0.5 * H_tabla_real
+
+        y_iso_min = 65.0 + H_tabla_real + 14.0
+        y_iso_max = H_hoja - 13.0
+        y_iso = 0.5 * (y_iso_min + y_iso_max)
+        h_iso_est = max(10.0, (bb.XLength + bb.YLength) * 0.41 + bb.ZLength * 0.82)
+        escala_iso = round(escala_num * 0.70, 3)
+        h_iso_disp = max(18.0, (y_iso_max - y_iso_min) - 12.0)
+        if h_iso_est * escala_iso > h_iso_disp:
+            escala_iso = round(max(0.10, h_iso_disp / h_iso_est), 3)
+
+        h_planta = max(4.0, bb.YLength * escala_num)
+        h_corte = max(4.0, bb.ZLength * escala_num)
+        w_corte = max(4.0, bb.XLength * escala_num)
+        rx_rotulo = (W_hoja - 10.0) - 175.0
+        if (x_vistas + 0.5 * w_corte + 18.0) >= rx_rotulo:
+            y_base_min = 64.0
+        else:
+            y_base_min = 14.0
+
+        y_corte_min = y_base_min + 13.0 + 0.5 * h_corte
+        y_planta_max = (H_hoja - 20.0) - 0.5 * h_planta
+        gap_vistas = 38.0
+        altura_stack = h_corte + gap_vistas + h_planta
+        espacio_col = (y_planta_max + 0.5 * h_planta) - (y_corte_min - 0.5 * h_corte)
+        holgura_vert = max(0.0, 0.5 * (espacio_col - altura_stack))
+        y_corte = y_corte_min + holgura_vert
+        y_planta = min(y_planta_max, y_corte + 0.5 * h_corte + gap_vistas + 0.5 * h_planta)
 
         # 1. Vista Superior / Frontal Circular (Planta desde +Z)
         v_sup = doc_planos.addObject("TechDraw::DrawViewPart", f"VP_{it_num:02d}_Planta")
@@ -1368,7 +1394,7 @@ def main():
         v_iso.Direction = App.Vector(1, -1, 1)
         v_iso.XDirection = App.Vector(1, 1, 0)
         v_iso.ScaleType = "Custom"
-        v_iso.Scale = round(escala_num * 0.70, 3)
+        v_iso.Scale = escala_iso
         v_iso.X = x_der
         v_iso.Y = y_iso
         v_iso.Caption = "Perspectiva Isométrica"
@@ -1391,23 +1417,45 @@ def main():
     print("Calculando proyecciones HLR de las 24 láminas IRAM...")
     doc_planos.recompute()
 
+    # Alinear verticalmente V00a_Corte_AA con V00a_Frente según su proyección real
+    try:
+        ef = v_arm_frente.getVisibleEdges()
+        ec = v_arm_corte.getVisibleEdges()
+        if ef and ec:
+            cy_f = 0.5 * (min(e.BoundBox.YMin for e in ef) + max(e.BoundBox.YMax for e in ef))
+            cy_c = 0.5 * (min(e.BoundBox.YMin for e in ec) + max(e.BoundBox.YMax for e in ec))
+            v_arm_corte.Y = float(v_arm_frente.Y.Value) + cy_f - cy_c
+    except Exception:
+        pass
+
     # Aplicar acotación geométrica automática (`TechDraw::DrawViewDimension`) en todas las vistas
     total_cotas_geom = 0
-    cotas_00a = acotar_vista_perfil_o_corte_iram(doc_planos, page_00a, v_arm_frente, "Cota_00a")
+    cotas_00a = acotar_vista_perfil_o_corte_iram(
+        doc_planos, page_00a, v_arm_frente, "Cota_00a", es_revolucion=False, formato="A2"
+    )
     total_cotas_geom += len(cotas_00a)
 
     for entrada in CATALOGO_ITEMS_BOM:
         if entrada["es_comercial"]:
             continue
         it_num = entrada["item"]
+        info = datos_piezas[it_num]
+        bb_i = info["shape"].BoundBox
+        fmt_i, _, _ = seleccionar_formato_y_escala(bb_i, es_conjunto=False)
+        es_rev = abs(bb_i.XLength - bb_i.YLength) <= 0.5
+
         page_p = doc_planos.getObject(entrada["hoja_plano"])
         v_sup = doc_planos.getObject(f"VP_{it_num:02d}_Planta")
         v_sec = doc_planos.getObject(f"VP_{it_num:02d}_Corte_AA")
         if page_p and v_sup:
-            c_diam = acotar_vista_circular_iram(doc_planos, page_p, v_sup, f"Cota_{it_num:02d}", max_diametros=3)
+            c_diam = acotar_vista_circular_iram(
+                doc_planos, page_p, v_sup, f"Cota_{it_num:02d}", max_diametros=3, formato=fmt_i
+            )
             total_cotas_geom += len(c_diam)
         if page_p and v_sec:
-            c_lin = acotar_vista_perfil_o_corte_iram(doc_planos, page_p, v_sec, f"Cota_{it_num:02d}")
+            c_lin = acotar_vista_perfil_o_corte_iram(
+                doc_planos, page_p, v_sec, f"Cota_{it_num:02d}", es_revolucion=es_rev, formato=fmt_i
+            )
             total_cotas_geom += len(c_lin)
 
     doc_planos.recompute()

@@ -298,11 +298,31 @@ def estilizar_vista_iram(vista, mostrar_ocultas=False, mostrar_centros=True):
             pass
 
 
-def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4):
+def _limites_aristas_2d(edges):
+    xmin, ymin, xmax, ymax = 1e9, 1e9, -1e9, -1e9
+    for e in edges:
+        bb = e.BoundBox
+        xmin = min(xmin, bb.XMin)
+        xmax = max(xmax, bb.XMax)
+        ymin = min(ymin, bb.YMin)
+        ymax = max(ymax, bb.YMax)
+    return xmin, ymin, xmax, ymax
+
+
+def _limites_seguros_hoja(vista, formato="A3"):
+    """Devuelve (dx_min, dx_max, dy_min, dy_max) relativos a la vista dentro del área útil IRAM."""
+    W, H = FORMATOS_IRAM.get(formato, (420.0, 297.0))
+    vx = float(vista.X.Value) if hasattr(vista.X, "Value") else float(vista.X)
+    vy = float(vista.Y.Value) if hasattr(vista.Y, "Value") else float(vista.Y)
+    return (30.0 - vx, (W - 14.0) - vx, 16.0 - vy, (H - 14.0) - vy)
+
+
+def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4, formato="A3"):
     """
     Detecta los círculos concéntricos proyectados en una vista superior/frontal (Direction=(0,0,1))
-    y crea cotas de diámetro reales (`TechDraw::DrawViewDimension`) escalonadas radialmente
-    para evitar superposiciones según IRAM 4503.
+    y crea cotas de diámetro reales (`TechDraw::DrawViewDimension`) dispuestas en el semicírculo
+    superior para nunca superponerse con el título (`Caption`) inferior de la vista ni salirse
+    de los márgenes IRAM.
     """
     try:
         edges = vista.getVisibleEdges()
@@ -311,61 +331,120 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
     if not edges:
         return []
 
+    xmin, ymin, xmax, ymax = _limites_aristas_2d(edges)
+    cx_vista = 0.5 * (xmin + xmax)
+    cy_vista = 0.5 * (ymin + ymax)
+    r_max_vista = max(1.0, 0.5 * max(xmax - xmin, ymax - ymin))
+
     # Agrupar aristas circulares completas o arcos grandes por su diámetro redondeado a 0.1 mm
     circulos_por_diam = {}
-    r_max_vista = 1.0
     for idx, e in enumerate(edges):
         curva = getattr(e, "Curve", None)
         if curva and curva.TypeId == "Part::GeomCircle":
             r = float(curva.Radius)
             d = round(2.0 * r, 2)
-            if d < 2.2:
+            if d < 1.8:
                 continue
-            r_max_vista = max(r_max_vista, r)
-            # Preferir círculos centrados en el origen (0,0) o el de mayor longitud de arco
             c = curva.Center
-            dist_centro = math.hypot(c.x, c.y)
+            dist_centro = math.hypot(c.x - cx_vista, c.y - cy_vista)
             clave = round(d, 1)
             actual = circulos_por_diam.get(clave)
-            score = e.Length - dist_centro * 2.0
+            # Preferir círculos concéntricos y en el semicírculo superior si son excéntricos
+            bonus_sup = 2.0 if c.y >= cy_vista - 0.5 else -5.0
+            score = e.Length - dist_centro * 3.0 + bonus_sup
             if actual is None or score > actual[1]:
-                circulos_por_diam[clave] = (idx, score, r, c.x, c.y, d)
+                circulos_por_diam[clave] = (idx, score, r, c.x, c.y, d, dist_centro)
 
     if not circulos_por_diam:
         return []
 
-    # Ordenar de mayor a menor diámetro y seleccionar los más representativos
-    ordenados = sorted(circulos_por_diam.values(), key=lambda x: x[2], reverse=True)
+    # Priorizar círculos concéntricos ordenados de mayor a menor diámetro, y luego a lo sumo 1 agujero excéntrico
+    concentricos = [it for it in circulos_por_diam.values() if it[6] <= 1.5]
+    excentricos = [it for it in circulos_por_diam.values() if it[6] > 1.5 and it[4] >= cy_vista - 0.5]
+    concentricos.sort(key=lambda x: x[2], reverse=True)
+    excentricos.sort(key=lambda x: (x[2], x[4]), reverse=True)
+
     seleccionados = []
-    for item in ordenados:
+    for item in concentricos:
         if len(seleccionados) >= max_diametros:
             break
-        # Evitar dos diámetros casi idénticos (< 1.2 mm de diferencia en el papel) que se pisen
-        if all(abs(item[2] - prev[2]) > 1.8 for prev in seleccionados):
+        if all(abs(item[2] - prev[2]) >= 2.2 for prev in seleccionados):
             seleccionados.append(item)
 
-    angulos_deg = [35.0, -35.0, 145.0, -145.0, 75.0, -75.0]
+    if len(seleccionados) < max_diametros and excentricos:
+        for item in excentricos:
+            if all(abs(item[2] - prev[2]) >= 2.0 for prev in seleccionados):
+                seleccionados.append(item)
+                break
+
+    dx_min_s, dx_max_s, dy_min_s, dy_max_s = _limites_seguros_hoja(vista, formato=formato)
+    # Solo ángulos en cuadrantes superiores (sin(ang) > 0) para mantener libre la zona inferior del Caption
+    angulos_deg = [34.0, 146.0, 14.0, 166.0]
     cotas_creadas = []
-    for k, (edge_idx, _, r_papel, cx, cy, _) in enumerate(seleccionados):
+    idx_conc = 0
+
+    for k, (edge_idx, _, r_papel, cx, cy, _, dist_centro) in enumerate(seleccionados):
         dim = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Diam_{k+1}")
         page.addView(dim)
         dim.Type = "Diameter"
         dim.MeasureType = "Projected"
         dim.FormatSpec = "⌀%.2w"
         dim.References2D = [(vista, f"Edge{edge_idx}")]
-        ang = math.radians(angulos_deg[k % len(angulos_deg)])
-        dist_etiqueta = r_max_vista + 9.0 + k * 5.5
-        dim.X = cx + dist_etiqueta * math.cos(ang)
-        dim.Y = cy + dist_etiqueta * math.sin(ang)
+
+        if dist_centro <= 1.5:
+            ang = math.radians(angulos_deg[idx_conc % len(angulos_deg)])
+            nivel = idx_conc // 2
+            dist_etiqueta = max(10.0, r_max_vista + 8.5 + nivel * 7.0)
+            lx = cx + dist_etiqueta * math.cos(ang)
+            ly = cy + dist_etiqueta * math.sin(ang)
+            idx_conc += 1
+        else:
+            # Para agujeros excéntricos (brida/tornillos), usar líder corto local hacia arriba-afuera
+            ang_exc = math.radians(42.0 if cx >= cx_vista else 138.0)
+            dist_local = max(7.0, r_papel + 6.5)
+            lx = cx + dist_local * math.cos(ang_exc)
+            ly = cy + dist_local * math.sin(ang_exc)
+
+        # Garantizar que nunca invada el título inferior ni los márgenes de la hoja
+        ly_min_caption = ymin + 2.0 if r_max_vista > 8.0 else cy_vista + 4.0
+        dim.X = max(dx_min_s + 8.0, min(dx_max_s - 8.0, lx))
+        dim.Y = max(max(dy_min_s + 4.0, ly_min_caption), min(dy_max_s - 4.0, ly))
         cotas_creadas.append(dim)
 
     return cotas_creadas
 
 
-def acotar_vista_perfil_o_corte_iram(doc, page, vista, prefijo_nombre):
+def _indices_extremos_vertices_2d(vista):
+    """Devuelve los índices (i_minx, i_maxx, i_miny, i_maxy) y límites de `getVisibleVertexes()`."""
+    try:
+        vs = vista.getVisibleVertexes()
+    except Exception:
+        vs = []
+    if not vs:
+        return None
+    i_minx = min(range(len(vs)), key=lambda i: (vs[i].x, abs(vs[i].y)))
+    i_maxx = max(range(len(vs)), key=lambda i: (vs[i].x, -abs(vs[i].y)))
+    i_miny = min(range(len(vs)), key=lambda i: (vs[i].y, abs(vs[i].x)))
+    i_maxy = max(range(len(vs)), key=lambda i: (vs[i].y, -abs(vs[i].x)))
+    xmin = vs[i_minx].x
+    xmax = vs[i_maxx].x
+    ymin = vs[i_miny].y
+    ymax = vs[i_maxy].y
+    return i_minx, i_maxx, i_miny, i_maxy, xmin, ymin, xmax, ymax, vs
+
+
+def acotar_vista_perfil_o_corte_iram(
+    doc,
+    page,
+    vista,
+    prefijo_nombre,
+    es_revolucion=False,
+    formato="A3",
+):
     """
-    Crea cotas lineales reales (`DistanceY` para altura total y escalones principales,
-    `DistanceX` para ancho máximo) en una vista frontal o de corte longitudinal.
+    Crea cotas lineales claras (`DistanceY` para longitud total y escalones relevantes a izq/der,
+    `DistanceX` para ancho/diámetro total e interior escalonados ARRIBA de la vista) siguiendo
+    IRAM 4503 para evitar cualquier superposición con el `Caption` inferior de la vista.
     """
     try:
         edges = vista.getVisibleEdges()
@@ -374,17 +453,24 @@ def acotar_vista_perfil_o_corte_iram(doc, page, vista, prefijo_nombre):
     if not edges:
         return []
 
-    # Encontrar aristas horizontales largas y aristas verticales extremas
-    xmin, ymin, xmax, ymax = 1e9, 1e9, -1e9, -1e9
+    ext = _indices_extremos_vertices_2d(vista)
+    if ext is not None:
+        i_minx, i_maxx, i_miny, i_maxy, xmin, ymin, xmax, ymax, vs = ext
+    else:
+        xmin, ymin, xmax, ymax = _limites_aristas_2d(edges)
+        i_minx = i_maxx = i_miny = i_maxy = None
+        vs = []
+
+    w_papel = xmax - xmin
+    h_papel = ymax - ymin
+    cx_vista = 0.5 * (xmin + xmax)
+    cy_vista = 0.5 * (ymin + ymax)
+    dx_min_s, dx_max_s, dy_min_s, dy_max_s = _limites_seguros_hoja(vista, formato=formato)
+
     aristas_vert = []
     aristas_horiz = []
-
     for idx, e in enumerate(edges):
         bb = e.BoundBox
-        xmin = min(xmin, bb.XMin)
-        xmax = max(xmax, bb.XMax)
-        ymin = min(ymin, bb.YMin)
-        ymax = max(ymax, bb.YMax)
         curva = getattr(e, "Curve", None)
         if curva and curva.TypeId == "Part::GeomLine" and e.Length >= 2.0:
             dx = abs(bb.XMax - bb.XMin)
@@ -395,48 +481,109 @@ def acotar_vista_perfil_o_corte_iram(doc, page, vista, prefijo_nombre):
                 aristas_horiz.append((idx, dx, 0.5 * (bb.YMin + bb.YMax), bb.XMin, bb.XMax))
 
     cotas = []
-    # 1. Cota vertical en la arista vertical exterior más larga (altura total o del cilindro principal)
-    if aristas_vert:
-        # Ordenar por longitud vertical descendente
-        aristas_vert.sort(key=lambda x: x[1], reverse=True)
-        idx_v, _, xv, yv0, yv1 = aristas_vert[0]
-        dim_h = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Alt_1")
-        page.addView(dim_h)
-        dim_h.Type = "DistanceY"
-        dim_h.MeasureType = "Projected"
-        dim_h.FormatSpec = "%.2w"
-        dim_h.References2D = [(vista, f"Edge{idx_v}")]
-        dim_h.X = xmax + 10.0
-        dim_h.Y = 0.5 * (yv0 + yv1)
-        cotas.append(dim_h)
 
-        # Si hay un segundo escalón vertical de distinta altura, acotarlo a la izquierda
-        for idx_v2, lv2, xv2, y2a, y2b in aristas_vert[1:]:
-            if abs(lv2 - aristas_vert[0][1]) > 2.5 and lv2 >= 3.5:
+    # 1. COTAS VERTICALES (Alturas / Longitudes) -> a la DERECHA e IZQUIERDA (nunca abajo)
+    if h_papel >= 2.0:
+        # Altura / longitud total a la derecha
+        if i_miny is not None and i_maxy is not None and i_miny != i_maxy:
+            dim_h = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Alt_1")
+            page.addView(dim_h)
+            dim_h.Type = "DistanceY"
+            dim_h.MeasureType = "Projected"
+            dim_h.FormatSpec = "%.2w"
+            dim_h.References2D = [(vista, f"Vertex{i_miny}"), (vista, f"Vertex{i_maxy}")]
+            dim_h.X = min(dx_max_s - 6.0, xmax + 9.5)
+            dim_h.Y = cy_vista
+            cotas.append(dim_h)
+        elif aristas_vert:
+            aristas_vert.sort(key=lambda x: x[1], reverse=True)
+            idx_v, _, _, yv0, yv1 = aristas_vert[0]
+            dim_h = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Alt_1")
+            page.addView(dim_h)
+            dim_h.Type = "DistanceY"
+            dim_h.MeasureType = "Projected"
+            dim_h.FormatSpec = "%.2w"
+            dim_h.References2D = [(vista, f"Edge{idx_v}")]
+            dim_h.X = min(dx_max_s - 6.0, xmax + 9.5)
+            dim_h.Y = 0.5 * (yv0 + yv1)
+            cotas.append(dim_h)
+
+        # Segundo escalón vertical distintivo (distinto de la altura total) a la izquierda
+        aristas_vert_ord = sorted(aristas_vert, key=lambda x: x[1], reverse=True)
+        for idx_v2, lv2, xv2, y2a, y2b in aristas_vert_ord:
+            if abs(lv2 - h_papel) > 2.5 and lv2 >= 4.0:
                 dim_h2 = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Alt_2")
                 page.addView(dim_h2)
                 dim_h2.Type = "DistanceY"
                 dim_h2.MeasureType = "Projected"
                 dim_h2.FormatSpec = "%.2w"
                 dim_h2.References2D = [(vista, f"Edge{idx_v2}")]
-                dim_h2.X = xmin - 10.0
+                dim_h2.X = max(dx_min_s + 6.0, xmin - 9.5)
                 dim_h2.Y = 0.5 * (y2a + y2b)
                 cotas.append(dim_h2)
                 break
 
-    # 2. Cota horizontal en la base/tope horizontal más ancho (si no redunda o para referencia en corte)
-    if aristas_horiz:
-        aristas_horiz.sort(key=lambda x: x[1], reverse=True)
-        idx_hz, _, yhz, xh0, xh1 = aristas_horiz[0]
-        dim_w = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Ancho_1")
-        page.addView(dim_w)
-        dim_w.Type = "DistanceX"
-        dim_w.MeasureType = "Projected"
-        dim_w.FormatSpec = "%.2w"
-        dim_w.References2D = [(vista, f"Edge{idx_hz}")]
-        dim_w.X = 0.5 * (xh0 + xh1)
-        dim_w.Y = ymin - 9.0
-        cotas.append(dim_w)
+    # 2. COTAS HORIZONTALES (Anchos / Diámetros exteriores) -> SIEMPRE ARRIBA (Y > ymax) para no tapar Caption
+    if w_papel >= 2.5:
+        fmt_x = "⌀%.2w" if es_revolucion else "%.2w"
+
+        # Buscar un diámetro/ancho interior centrado o escalón secundario relevante para anidar dentro del total
+        par_interior = None
+        if vs:
+            # Buscar pares de vértices simétricos respecto a cx_vista cerca de ymax (boca/escalón superior)
+            cand_sup = [
+                i for i, v in enumerate(vs)
+                if abs(v.y - ymax) < max(3.0, 0.25 * h_papel) and abs(v.x - cx_vista) >= 2.5
+            ]
+            # Agrupar por |x - cx_vista| para hallar simétricos distintos del ancho total
+            por_radio = {}
+            for i in cand_sup:
+                rad = round(abs(vs[i].x - cx_vista), 1)
+                if rad * 2.0 < w_papel - 5.0 and rad * 2.0 >= 5.5:
+                    por_radio.setdefault(rad, []).append(i)
+            for rad in sorted(por_radio.keys(), reverse=True):
+                idxs = por_radio[rad]
+                izq = [i for i in idxs if vs[i].x < cx_vista]
+                der = [i for i in idxs if vs[i].x > cx_vista]
+                if izq and der:
+                    par_interior = (izq[0], der[0])
+                    break
+
+        y_cota_total = ymax + 8.5
+        if par_interior is not None and (ymax + 15.5) <= dy_max_s - 3.0:
+            dim_w_int = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Ancho_Int")
+            page.addView(dim_w_int)
+            dim_w_int.Type = "DistanceX"
+            dim_w_int.MeasureType = "Projected"
+            dim_w_int.FormatSpec = fmt_x
+            dim_w_int.References2D = [(vista, f"Vertex{par_interior[0]}"), (vista, f"Vertex{par_interior[1]}")]
+            dim_w_int.X = cx_vista
+            dim_w_int.Y = ymax + 7.5
+            cotas.append(dim_w_int)
+            y_cota_total = ymax + 14.5
+
+        if i_minx is not None and i_maxx is not None and i_minx != i_maxx:
+            dim_w = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Ancho_1")
+            page.addView(dim_w)
+            dim_w.Type = "DistanceX"
+            dim_w.MeasureType = "Projected"
+            dim_w.FormatSpec = fmt_x
+            dim_w.References2D = [(vista, f"Vertex{i_minx}"), (vista, f"Vertex{i_maxx}")]
+            dim_w.X = cx_vista
+            dim_w.Y = min(dy_max_s - 3.5, y_cota_total)
+            cotas.append(dim_w)
+        elif aristas_horiz:
+            aristas_horiz.sort(key=lambda x: x[1], reverse=True)
+            idx_hz, _, _, xh0, xh1 = aristas_horiz[0]
+            dim_w = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Ancho_1")
+            page.addView(dim_w)
+            dim_w.Type = "DistanceX"
+            dim_w.MeasureType = "Projected"
+            dim_w.FormatSpec = fmt_x
+            dim_w.References2D = [(vista, f"Edge{idx_hz}")]
+            dim_w.X = 0.5 * (xh0 + xh1)
+            dim_w.Y = min(dy_max_s - 3.5, y_cota_total)
+            cotas.append(dim_w)
 
     return cotas
 
