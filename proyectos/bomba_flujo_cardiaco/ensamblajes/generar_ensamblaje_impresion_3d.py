@@ -653,7 +653,7 @@ def main():
     res = asm.solve()
     print(f"Solver Assembly (0 = OK): {res}")
     transp_insp_map = {
-        "Cilindro_09_3D": 75,
+        "Cilindro_09_3D": 80,
         "Tapa_Exterior_16a_3D": 65,
     }
     generar_hojas_materiales_y_bom(doc, asm, transp_insp_map=transp_insp_map)

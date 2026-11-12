@@ -34,6 +34,13 @@ MATERIALES_BASE = {
         "color": (0.85, 0.95, 1.00),
         "transparencia": 75,
     },
+    "Vidrio_Sodocalcico": {
+        "nombre": "Vidrio Sodocálcico",
+        "densidad_num": "0.00000250",
+        "densidad_desc": "2.50 g / cm^3 (kg / mm^3)",
+        "color": (0.80, 0.90, 0.88),
+        "transparencia": 80,
+    },
     "Laton": {
         "nombre": "Latón",
         "densidad_num": "0.00000850",

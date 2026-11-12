@@ -227,14 +227,14 @@ def _guardar_comercial(pz, sol, categoria, nombre):
 
 
 def generar_comerciales_y_cilindro():
-    # 1. Cilindro Acrílico 3D (Ø83 x Ø76 x 188.75 mm) adaptado a Tapa_Exterior/Interior
+    # 1. Cilindro Vidrio Sodocálcico 3D (Ø83 x Ø76 x 188.75 mm) adaptado a Tapa_Exterior/Interior
     pz = Pieza("Cilindro_09_3D")
     pz.parametros([
-        ("d_ext",   "Diámetro exterior camisa acrílica (escala)", "83.00 mm",  "L", None, "calculado"),
-        ("d_int",   "Diámetro interior camisa acrílica (escala)", "76.00 mm",  "L", None, "calculado"),
+        ("d_ext",   "Diámetro exterior camisa vidrio (escala)", "83.00 mm",  "L", None, "calculado"),
+        ("d_int",   "Diámetro interior camisa vidrio (escala)", "76.00 mm",  "L", None, "calculado"),
         ("l_total", "Longitud de la camisa (250 mm * 0.755)",     "188.75 mm", "L", None, "plano"),
     ], modo=1, escala="1.0", holgura_fdm="0.20 mm")
-    pz.materiales("Acrilico_PMMA")
+    pz.materiales("Vidrio_Sodocalcico")
     p = pz.p
     ext = pz.cil("Cil_Ext", f"{p('d_ext')} / 2", p("l_total"))
     inte = pz.cil("Cil_Int", f"{p('d_int')} / 2", f"{p('l_total')} + 2 mm", z="-1 mm")
