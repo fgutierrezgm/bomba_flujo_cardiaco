@@ -4,9 +4,10 @@ Motor reutilizable de generación automática de planos técnicos bajo normas IR
 para proyectos de FreeCAD (TechDraw).
 
 Normas aplicadas:
-- IRAM 4501: Formatos de láminas (A4, A3, A2) y márgenes (25 mm izq. archivo, 10 mm resto).
+- IRAM 4504: Formatos de láminas (A4, A3, A2) y márgenes (25 mm izq. archivo, 10 mm resto).
 - IRAM 4502: Líneas de dibujo técnico (espesores y tipos A, B, E, F, G).
-- IRAM 4503: Acotación de planos en fabricación metalmecánica.
+- IRAM 4503: Letras y números en dibujo tecnológico.
+- IRAM 4513: Acotación de planos en fabricación metalmecánica.
 - IRAM 4505: Escalas lineales normalizadas (2:1, 1:1, 1:2, 1:5).
 - IRAM 4508: Rótulo, lista de materiales (BOM) y despiece.
 - IRAM 4501-2: Método de proyección ISO-E (Primer Diedro) con símbolo normalizado.
@@ -43,7 +44,7 @@ def _cargar_escudo_base64(ruta_png):
 
 def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
     """
-    Genera una plantilla SVG para TechDraw siguiendo las normas IRAM 4501 / 4508
+    Genera una plantilla SVG para TechDraw siguiendo las normas IRAM 4504 / 4508
     y replicando el rótulo institucional de la FCAI - UNCUYO con escudo a color
     y atributos freecad:editable sincronizables con la hoja Datos_Rotulo.
     """
@@ -69,7 +70,7 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
             f'preserveAspectRatio="xMidYMid meet" href="{escudo_uri}" />'
         )
 
-    # Coordenadas de referencia perimetral (grilla IRAM)
+    # Coordenadas de referencia perimetral (grilla IRAM 4504)
     cols_grilla = 6 if formato == "A4" else (8 if formato == "A3" else 12)
     filas_grilla = 4 if formato == "A4" else (6 if formato == "A3" else 8)
     letras = "ABCDEFGHJKLM"
@@ -115,19 +116,19 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
         )
 
     # Símbolo ISO-E (Método E de proyección del primer diedro - IRAM 4501-2)
-    # Ubicado en la celda de símbolo dentro del rótulo: (rx + 26 .. rx + 52, ry + 30 .. ry + 41)
+    # Centrado dentro de la celda (rx + 26 .. rx + 52, ry + 30 .. ry + 41)
     sx = rx + 39.0
     sy = ry + 35.5
     simbolo_iso_e = f"""
     <g id="simbolo_iso_e" stroke="#000000" fill="none">
-      <!-- Ejes de simetría (línea tipo F: trazo y punto fino) -->
-      <line x1="{sx - 12.5:.2f}" y1="{sy:.2f}" x2="{sx + 9.5:.2f}" y2="{sy:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
-      <line x1="{sx + 4.5:.2f}" y1="{sy - 4.5:.2f}" x2="{sx + 4.5:.2f}" y2="{sy + 4.5:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <!-- Ejes de simetría (línea tipo G: trazo y punto fino) -->
+      <line x1="{sx - 10.5:.2f}" y1="{sy:.2f}" x2="{sx + 8.5:.2f}" y2="{sy:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <line x1="{sx + 4.0:.2f}" y1="{sy - 4.2:.2f}" x2="{sx + 4.0:.2f}" y2="{sy + 4.2:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
       <!-- Trapecio (cono truncado vista frontal) -->
-      <polygon points="{sx - 10.5:.2f},{sy - 3.0:.2f} {sx - 4.5:.2f},{sy - 1.5:.2f} {sx - 4.5:.2f},{sy + 1.5:.2f} {sx - 10.5:.2f},{sy + 3.0:.2f}" stroke-width="0.45"/>
-      <!-- Dos círculos concéntricos a la derecha (vista lateral izquierda en ISO-E) -->
-      <circle cx="{sx + 4.5:.2f}" cy="{sy:.2f}" r="3.0" stroke-width="0.45"/>
-      <circle cx="{sx + 4.5:.2f}" cy="{sy:.2f}" r="1.5" stroke-width="0.35"/>
+      <polygon points="{sx - 9.0:.2f},{sy - 2.8:.2f} {sx - 2.5:.2f},{sy - 1.4:.2f} {sx - 2.5:.2f},{sy + 1.4:.2f} {sx - 9.0:.2f},{sy + 2.8:.2f}" stroke-width="0.45"/>
+      <!-- Dos círculos concéntricos a la derecha (vista lateral izquierda proyectada a la derecha) -->
+      <circle cx="{sx + 4.0:.2f}" cy="{sy:.2f}" r="2.8" stroke-width="0.45"/>
+      <circle cx="{sx + 4.0:.2f}" cy="{sy:.2f}" r="1.4" stroke-width="0.35"/>
     </g>
     """
 
@@ -139,11 +140,11 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
    height="{H:.1f}mm"
    viewBox="0 0 {W:.1f} {H:.1f}"
    version="1.1">
-  <!-- Borde exterior de corte de hoja (IRAM 4501) -->
+  <!-- Borde exterior de corte de hoja (IRAM 4504) -->
   <rect x="0" y="0" width="{W:.1f}" height="{H:.1f}" fill="none" stroke="#000000" stroke-width="0.25"/>
   <!-- Marco exterior de referencia -->
   <rect x="{x0 - 5:.2f}" y="{y0 - 5:.2f}" width="{marco_w + 10:.2f}" height="{marco_h + 10:.2f}" fill="none" stroke="#000000" stroke-width="0.25"/>
-  <!-- Recuadro principal de dibujo (IRAM 4501: margen izquierdo 25 mm, resto 10 mm, línea tipo A 0.7 mm) -->
+  <!-- Recuadro principal de dibujo (IRAM 4504: margen izquierdo 25 mm, resto 10 mm, línea tipo A 0.7 mm) -->
   <rect x="{x0:.2f}" y="{y0:.2f}" width="{marco_w:.2f}" height="{marco_h:.2f}" fill="none" stroke="#000000" stroke-width="0.70"/>
   <!-- Grilla de coordenadas de referencia -->
   {"".join(svg_grilla)}
@@ -161,60 +162,66 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
     <line x1="{rx:.2f}" y1="{ry + 41.0:.2f}" x2="{rx + rw:.2f}" y2="{ry + 41.0:.2f}" stroke="#000000" stroke-width="0.35"/>
 
     <!-- Líneas verticales internas del rótulo -->
-    <!-- Columna escudo (0..26 mm) -->
+    <!-- Columna escudo (0..26 mm) y divisoria Formato | Hoja en fila inferior (17.5 mm) -->
     <line x1="{rx + 26.0:.2f}" y1="{ry:.2f}" x2="{rx + 26.0:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.35"/>
-    <!-- Separador Carrera / Cátedra en fila 2 -->
+    <line x1="{rx + 17.5:.2f}" y1="{ry + 41.0:.2f}" x2="{rx + 17.5:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.25"/>
+    <!-- Separador Carrera / Cátedra en filas 2 y 3 -->
     <line x1="{rx + 85.0:.2f}" y1="{ry + 7.5:.2f}" x2="{rx + 85.0:.2f}" y2="{ry + 22.5:.2f}" stroke="#000000" stroke-width="0.35"/>
     <!-- Columnas inferiores (ry+30 .. ry+51) -->
     <line x1="{rx + 52.0:.2f}" y1="{ry + 30.0:.2f}" x2="{rx + 52.0:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.35"/>
     <line x1="{rx + 132.0:.2f}" y1="{ry + 30.0:.2f}" x2="{rx + 132.0:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.50"/>
     <line x1="{rx + 92.0:.2f}" y1="{ry + 41.0:.2f}" x2="{rx + 92.0:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.35"/>
+    <!-- Subdivisión entre Tol. Gral. (92..114) y Masa (114..132) para evitar apilar 3 líneas -->
+    <line x1="{rx + 114.0:.2f}" y1="{ry + 41.0:.2f}" x2="{rx + 114.0:.2f}" y2="{ry + rh:.2f}" stroke="#000000" stroke-width="0.25"/>
 
     <!-- Símbolo ISO-E -->
     {simbolo_iso_e}
 
-    <!-- Etiquetas fijas del rótulo (IRAM 4508: desplazadas a la parte superior de cada celda para evitar solapamiento) -->
-    <g font-family="Liberation Sans, Arial, sans-serif" font-size="1.9" fill="#555555">
-      <text x="{rx + 2.0:.2f}" y="{ry + 32.2:.2f}">Escala:</text>
-      <text x="{rx + 2.0:.2f}" y="{ry + 43.0:.2f}">Formato / Hoja:</text>
-      <text x="{rx + 28.0:.2f}" y="{ry + 43.0:.2f}">Fecha:</text>
-      <text x="{rx + 54.0:.2f}" y="{ry + 32.2:.2f}">Denominación / Título del Plano:</text>
-      <text x="{rx + 54.0:.2f}" y="{ry + 43.0:.2f}">Material:</text>
-      <text x="{rx + 94.0:.2f}" y="{ry + 43.0:.2f}">Tol. Gral. / Masa:</text>
-      <text x="{rx + 134.0:.2f}" y="{ry + 32.2:.2f}">Dibujó / Revisó:</text>
-      <text x="{rx + 134.0:.2f}" y="{ry + 43.0:.2f}">Plano Nº:</text>
+    <!-- Etiquetas fijas del rótulo (IRAM 4508: separadas +2.4 mm debajo de cada línea horizontal) -->
+    <g font-family="Liberation Sans, Arial, sans-serif" font-size="1.8" fill="#555555">
+      <text x="{rx + 1.8:.2f}" y="{ry + 32.3:.2f}">Escala:</text>
+      <text x="{rx + 1.5:.2f}" y="{ry + 43.2:.2f}">Formato:</text>
+      <text x="{rx + 18.5:.2f}" y="{ry + 43.2:.2f}">Hoja:</text>
+      <text x="{rx + 28.0:.2f}" y="{ry + 43.2:.2f}">Fecha:</text>
+      <text x="{rx + 54.0:.2f}" y="{ry + 32.3:.2f}">Denominación / Título del Plano:</text>
+      <text x="{rx + 54.0:.2f}" y="{ry + 43.2:.2f}">Material:</text>
+      <text x="{rx + 93.5:.2f}" y="{ry + 43.2:.2f}">Tol. Gral.:</text>
+      <text x="{rx + 115.5:.2f}" y="{ry + 43.2:.2f}">Masa:</text>
+      <text x="{rx + 134.0:.2f}" y="{ry + 32.1:.2f}">Dibujó / Revisó:</text>
+      <text x="{rx + 134.0:.2f}" y="{ry + 43.2:.2f}">Plano Nº:</text>
     </g>
 
-    <!-- Textos editables (sincronizados con hoja Datos_Rotulo: ubicados en la mitad inferior de celda) -->
+    <!-- Textos editables (ubicados en la franja inferior de cada celda sin pisar bordes ni subtítulos) -->
     <g font-family="Liberation Sans, Arial, sans-serif" fill="#000000">
-      <text freecad:editable="INSTITUCION" x="{rx + 100.5:.2f}" y="{ry + 5.2:.2f}" font-size="3.3" font-weight="bold" text-anchor="middle"><tspan>Facultad de Ciencias Aplicadas a la Industria - UNCUYO</tspan></text>
-      <text freecad:editable="CARRERA" x="{rx + 55.5:.2f}" y="{ry + 12.6:.2f}" font-size="3.0" text-anchor="middle"><tspan>Ingeniería Mecánica</tspan></text>
-      <text freecad:editable="CATEDRA" x="{rx + 130.0:.2f}" y="{ry + 12.6:.2f}" font-size="3.0" text-anchor="middle"><tspan>Máquinas Térmicas e Hidráulicas</tspan></text>
-      <text freecad:editable="CURSO" x="{rx + 55.5:.2f}" y="{ry + 20.0:.2f}" font-size="2.8" text-anchor="middle"><tspan>4to Año - Segundo semestre</tspan></text>
-      <text freecad:editable="PROFESOR" x="{rx + 130.0:.2f}" y="{ry + 20.0:.2f}" font-size="2.8" text-anchor="middle"><tspan>Profesor: Analía Bonino</tspan></text>
-      <text freecad:editable="PROYECTO" x="{rx + 100.5:.2f}" y="{ry + 27.5:.2f}" font-size="3.1" font-weight="bold" text-anchor="middle"><tspan>Diseño y construcción de una bomba de simulación de flujo cardíaco</tspan></text>
+      <text freecad:editable="INSTITUCION" x="{rx + 100.5:.2f}" y="{ry + 5.2:.2f}" font-size="3.2" font-weight="bold" text-anchor="middle"><tspan>Facultad de Ciencias Aplicadas a la Industria - UNCUYO</tspan></text>
+      <text freecad:editable="CARRERA" x="{rx + 55.5:.2f}" y="{ry + 12.6:.2f}" font-size="2.9" text-anchor="middle"><tspan>Ingeniería Mecánica</tspan></text>
+      <text freecad:editable="CATEDRA" x="{rx + 130.0:.2f}" y="{ry + 12.6:.2f}" font-size="2.9" text-anchor="middle"><tspan>Máquinas Térmicas e Hidráulicas</tspan></text>
+      <text freecad:editable="CURSO" x="{rx + 55.5:.2f}" y="{ry + 20.0:.2f}" font-size="2.7" text-anchor="middle"><tspan>4to Año - Segundo semestre</tspan></text>
+      <text freecad:editable="PROFESOR" x="{rx + 130.0:.2f}" y="{ry + 20.0:.2f}" font-size="2.7" text-anchor="middle"><tspan>Profesor: Analía Bonino</tspan></text>
+      <text freecad:editable="PROYECTO" x="{rx + 100.5:.2f}" y="{ry + 27.5:.2f}" font-size="3.0" font-weight="bold" text-anchor="middle"><tspan>Diseño y construcción de una bomba de simulación de flujo cardíaco</tspan></text>
 
       <!-- Escala -->
-      <text freecad:editable="ESCALA" x="{rx + 13.0:.2f}" y="{ry + 39.2:.2f}" font-size="4.0" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
-      <!-- Formato y Hoja -->
-      <text freecad:editable="FORMATO" x="{rx + 2.5:.2f}" y="{ry + 48.8:.2f}" font-size="2.7" font-weight="bold"><tspan>IRAM {formato}</tspan></text>
-      <text freecad:editable="HOJA" x="{rx + 24.5:.2f}" y="{ry + 48.8:.2f}" font-size="2.6" text-anchor="end"><tspan>1/24</tspan></text>
+      <text freecad:editable="ESCALA" x="{rx + 13.0:.2f}" y="{ry + 39.0:.2f}" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
+      <!-- Formato y Hoja en subceldas propias (sin text-anchor="end") -->
+      <text freecad:editable="FORMATO" x="{rx + 8.8:.2f}" y="{ry + 48.6:.2f}" font-size="2.3" font-weight="bold" text-anchor="middle"><tspan>IRAM {formato}</tspan></text>
+      <text freecad:editable="HOJA" x="{rx + 21.8:.2f}" y="{ry + 48.6:.2f}" font-size="2.3" text-anchor="middle"><tspan>1/1</tspan></text>
 
       <!-- Fecha -->
-      <text freecad:editable="FECHA" x="{rx + 39.0:.2f}" y="{ry + 48.8:.2f}" font-size="2.8" text-anchor="middle"><tspan>12/11/2026</tspan></text>
+      <text freecad:editable="FECHA" x="{rx + 39.0:.2f}" y="{ry + 48.6:.2f}" font-size="2.6" text-anchor="middle"><tspan>12/11/2026</tspan></text>
 
       <!-- Título de la pieza/conjunto -->
-      <text freecad:editable="TITULO" x="{rx + 92.0:.2f}" y="{ry + 39.2:.2f}" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
+      <text freecad:editable="TITULO" x="{rx + 92.0:.2f}" y="{ry + 38.8:.2f}" font-size="3.6" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
 
-      <!-- Material y Masa/Tolerancia -->
-      <text freecad:editable="MATERIAL" x="{rx + 72.0:.2f}" y="{ry + 48.8:.2f}" font-size="2.8" font-weight="bold" text-anchor="middle"><tspan>AISI 304</tspan></text>
-      <text freecad:editable="TOL_GRAL" x="{rx + 94.0:.2f}" y="{ry + 46.5:.2f}" font-size="2.2"><tspan>ISO 2768-mK</tspan></text>
-      <text freecad:editable="MASA" x="{rx + 94.0:.2f}" y="{ry + 49.5:.2f}" font-size="2.2"><tspan>Masa: - g</tspan></text>
+      <!-- Material (font-size 2.35 para admitir nombres largos como "Acero Inox. AISI 304") -->
+      <text freecad:editable="MATERIAL" x="{rx + 72.0:.2f}" y="{ry + 48.6:.2f}" font-size="2.35" font-weight="bold" text-anchor="middle"><tspan>AISI 304</tspan></text>
+      <!-- Tolerancia General y Masa en subceldas contiguas -->
+      <text freecad:editable="TOL_GRAL" x="{rx + 103.0:.2f}" y="{ry + 48.6:.2f}" font-size="2.15" text-anchor="middle"><tspan>ISO 2768-mK</tspan></text>
+      <text freecad:editable="MASA" x="{rx + 123.0:.2f}" y="{ry + 48.6:.2f}" font-size="2.15" text-anchor="middle"><tspan>3185 g</tspan></text>
 
-      <!-- Autor, Aprobado y Número de Plano -->
-      <text freecad:editable="AUTOR" x="{rx + 132.0:.2f}" y="{ry + 36.2:.2f}" font-size="2.5"><tspan>Dib.: F. Gutiérrez</tspan></text>
-      <text freecad:editable="APROBADO" x="{rx + 134.0:.2f}" y="{ry + 39.8:.2f}" font-size="2.3"><tspan>Apr.: Ing. A. Bonino</tspan></text>
-      <text freecad:editable="NUM_PLANO" x="{rx + 153.5:.2f}" y="{ry + 49.0:.2f}" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
+      <!-- Autor y Aprobado con margen izquierdo rx+134.0 (despegados de la línea vertical rx+132.0) -->
+      <text freecad:editable="AUTOR" x="{rx + 134.0:.2f}" y="{ry + 35.8:.2f}" font-size="2.3"><tspan>Dib.: F. Gutiérrez</tspan></text>
+      <text freecad:editable="APROBADO" x="{rx + 134.0:.2f}" y="{ry + 39.2:.2f}" font-size="2.2"><tspan>Apr.: Ing. A. Bonino</tspan></text>
+      <text freecad:editable="NUM_PLANO" x="{rx + 153.5:.2f}" y="{ry + 48.8:.2f}" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
     </g>
   </g>
 </svg>
@@ -250,21 +257,17 @@ def seleccionar_formato_y_escala(bb, es_conjunto=False):
     if es_conjunto:
         return "A2", 0.5, "1:2"
 
-    # Para piezas pequeñas (< 48 mm) usamos escala de ampliación 2:1 en A3 o A4
     if dim_max <= 38.0 and suma_vistas <= 65.0:
         return "A4", 2.0, "2:1"
     if dim_max <= 55.0 and suma_vistas <= 95.0:
         return "A3", 2.0, "2:1"
 
-    # Escala natural 1:1 en A4 si entra cómodamente con la tabla paramétrica
     if dim_max <= 85.0 and suma_vistas <= 135.0:
         return "A4", 1.0, "1:1"
 
-    # Escala natural 1:1 en A3 para piezas medianas
     if dim_max <= 145.0 and suma_vistas <= 225.0:
         return "A3", 1.0, "1:1"
 
-    # Escala de reducción 1:2 en A3 para piezas grandes (tapas Ø200, tensores 288 mm, ejes)
     if dim_max <= 340.0:
         return "A3", 0.5, "1:2"
 
@@ -336,7 +339,6 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
     cy_vista = 0.5 * (ymin + ymax)
     r_max_vista = max(1.0, 0.5 * max(xmax - xmin, ymax - ymin))
 
-    # Agrupar aristas circulares completas o arcos grandes por su diámetro redondeado a 0.1 mm
     circulos_por_diam = {}
     for idx, e in enumerate(edges):
         curva = getattr(e, "Curve", None)
@@ -349,7 +351,6 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
             dist_centro = math.hypot(c.x - cx_vista, c.y - cy_vista)
             clave = round(d, 1)
             actual = circulos_por_diam.get(clave)
-            # Preferir círculos concéntricos y en el semicírculo superior si son excéntricos
             bonus_sup = 2.0 if c.y >= cy_vista - 0.5 else -5.0
             score = e.Length - dist_centro * 3.0 + bonus_sup
             if actual is None or score > actual[1]:
@@ -358,7 +359,6 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
     if not circulos_por_diam:
         return []
 
-    # Priorizar círculos concéntricos ordenados de mayor a menor diámetro, y luego a lo sumo 1 agujero excéntrico
     concentricos = [it for it in circulos_por_diam.values() if it[6] <= 1.5]
     excentricos = [it for it in circulos_por_diam.values() if it[6] > 1.5 and it[4] >= cy_vista - 0.5]
     concentricos.sort(key=lambda x: x[2], reverse=True)
@@ -378,7 +378,6 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
                 break
 
     dx_min_s, dx_max_s, dy_min_s, dy_max_s = _limites_seguros_hoja(vista, formato=formato)
-    # Solo ángulos en cuadrantes superiores (sin(ang) > 0) para mantener libre la zona inferior del Caption
     angulos_deg = [34.0, 146.0, 14.0, 166.0]
     cotas_creadas = []
     idx_conc = 0
@@ -399,13 +398,11 @@ def acotar_vista_circular_iram(doc, page, vista, prefijo_nombre, max_diametros=4
             ly = cy + dist_etiqueta * math.sin(ang)
             idx_conc += 1
         else:
-            # Para agujeros excéntricos (brida/tornillos), usar líder corto local hacia arriba-afuera
             ang_exc = math.radians(42.0 if cx >= cx_vista else 138.0)
             dist_local = max(7.0, r_papel + 6.5)
             lx = cx + dist_local * math.cos(ang_exc)
             ly = cy + dist_local * math.sin(ang_exc)
 
-        # Garantizar que nunca invada el título inferior ni los márgenes de la hoja
         ly_min_caption = ymin + 2.0 if r_max_vista > 8.0 else cy_vista + 4.0
         dim.X = max(dx_min_s + 8.0, min(dx_max_s - 8.0, lx))
         dim.Y = max(max(dy_min_s + 4.0, ly_min_caption), min(dy_max_s - 4.0, ly))
@@ -444,7 +441,7 @@ def acotar_vista_perfil_o_corte_iram(
     """
     Crea cotas lineales claras (`DistanceY` para longitud total y escalones relevantes a izq/der,
     `DistanceX` para ancho/diámetro total e interior escalonados ARRIBA de la vista) siguiendo
-    IRAM 4503 para evitar cualquier superposición con el `Caption` inferior de la vista.
+    IRAM 4513 para evitar cualquier superposición con el `Caption` inferior de la vista.
     """
     try:
         edges = vista.getVisibleEdges()
@@ -482,9 +479,7 @@ def acotar_vista_perfil_o_corte_iram(
 
     cotas = []
 
-    # 1. COTAS VERTICALES (Alturas / Longitudes) -> a la DERECHA e IZQUIERDA (nunca abajo)
     if h_papel >= 2.0:
-        # Altura / longitud total a la derecha
         if i_miny is not None and i_maxy is not None and i_miny != i_maxy:
             dim_h = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Alt_1")
             page.addView(dim_h)
@@ -508,7 +503,6 @@ def acotar_vista_perfil_o_corte_iram(
             dim_h.Y = 0.5 * (yv0 + yv1)
             cotas.append(dim_h)
 
-        # Segundo escalón vertical distintivo (distinto de la altura total) a la izquierda
         aristas_vert_ord = sorted(aristas_vert, key=lambda x: x[1], reverse=True)
         for idx_v2, lv2, xv2, y2a, y2b in aristas_vert_ord:
             if abs(lv2 - h_papel) > 2.5 and lv2 >= 4.0:
@@ -523,19 +517,15 @@ def acotar_vista_perfil_o_corte_iram(
                 cotas.append(dim_h2)
                 break
 
-    # 2. COTAS HORIZONTALES (Anchos / Diámetros exteriores) -> SIEMPRE ARRIBA (Y > ymax) para no tapar Caption
     if w_papel >= 2.5:
         fmt_x = "⌀%.2w" if es_revolucion else "%.2w"
 
-        # Buscar un diámetro/ancho interior centrado o escalón secundario relevante para anidar dentro del total
         par_interior = None
         if vs:
-            # Buscar pares de vértices simétricos respecto a cx_vista cerca de ymax (boca/escalón superior)
             cand_sup = [
                 i for i, v in enumerate(vs)
                 if abs(v.y - ymax) < max(3.0, 0.25 * h_papel) and abs(v.x - cx_vista) >= 2.5
             ]
-            # Agrupar por |x - cx_vista| para hallar simétricos distintos del ancho total
             por_radio = {}
             for i in cand_sup:
                 rad = round(abs(vs[i].x - cx_vista), 1)
@@ -604,11 +594,10 @@ def acotar_detalles_y_roscas_corte_iram(
     formato="A3",
 ):
     """
-    Complementa la vista de corte A-A según IRAM 4502 / ISO 6410-1:
+    Complementa la vista de corte A-A según IRAM 4520 / ISO 6410-1:
     1. Dibuja líneas cosméticas de rosca (flancos al diámetro nominal exterior, línea de fin
        de rosca útil y eje trazo-punto) en los agujeros roscados visibles en el corte.
-    2. Acota visualmente la profundidad de las roscas (`M3 prof. ...`, `M8 prof. ...`, etc.)
-       y profundidades internas clave (cavidades, alojamientos, ranuras) evitando solapes.
+    2. Acota visualmente la profundidad de las roscas y profundidades internas evitando solapes.
     """
     try:
         edges = vista.getVisibleEdges()
@@ -632,7 +621,6 @@ def acotar_detalles_y_roscas_corte_iram(
     rx0_rel = (W_hoja - 10.0) - 175.0 - vx
     ry1_rel = 61.0 - vy
 
-    # Catálogo estándar rosca -> (d_mecha_aprox, D_nominal, etiqueta)
     TABLA_ROSCAS = [
         ("m3", 2.5, 3.0, "M3"),
         ("m4", 3.3, 4.0, "M4"),
@@ -669,7 +657,6 @@ def acotar_detalles_y_roscas_corte_iram(
         elif al_l.startswith(("p_cav", "p_reb", "p_caj", "p_aloj", "p_reten", "p_esc", "a_ran")):
             profs_internas.append((val_mm, alias))
 
-    # Recopilar aristas verticales y horizontales
     aristas_vert = []
     aristas_horiz = []
     for idx, e in enumerate(edges):
@@ -693,7 +680,6 @@ def acotar_detalles_y_roscas_corte_iram(
                 pass
 
     def _lugar_libre(x_pref, y_pref, lado_izq, label_len=8):
-        # Las cotas DistanceY están rotadas 90°: ~6 mm de ancho en X y ~(label_len * 2.2) mm de alto en Y
         alto_txt = max(14.0, label_len * 2.2)
         x_cand = x_pref
         if not lado_izq and x_cand >= rx0_rel - 4.0 and y_pref <= ry1_rel + 4.0:
@@ -719,7 +705,6 @@ def acotar_detalles_y_roscas_corte_iram(
     cotas_nuevas = []
     prof_acotadas = set()
 
-    # 1. Detectar pares de aristas verticales paralelas correspondientes a agujeros roscados
     usados = set()
     pares_rosca = []
     for i in range(len(aristas_vert)):
@@ -746,8 +731,6 @@ def acotar_detalles_y_roscas_corte_iram(
                 pares_rosca.append((idx_a, idx_b, xa, xb, ya0, ya1, match_rosca))
                 break
 
-    # En cortes bajos (< 26 mm en papel) NO apilar cotas de rosca en el corte general
-    # (se llevan a una Vista de Detalle ampliada 2:1); solo dibujar las líneas cosméticas.
     h_corte_papel = ymax - ymin
     permitir_cotas_en_corte = h_corte_papel >= 26.0
 
@@ -801,7 +784,6 @@ def acotar_detalles_y_roscas_corte_iram(
                 pos_ocupadas.append(pos)
                 prof_acotadas.add(clave_prof)
 
-    # 2. Acotar hasta 1 profundidad interna relevante solo si el corte tiene altura suficiente
     n_int = 0
     for val_mm, alias in profs_internas:
         if not permitir_cotas_en_corte or n_int >= 1:
@@ -856,7 +838,7 @@ def crear_vista_detalle_roscas_iram(
 ):
     """
     Crea una Vista de Detalle ampliada (`TechDraw::DrawViewDetail`, p.ej. Detalle A 2:1)
-    a partir de `vista_corte`, dibuja líneas cosméticas de rosca IRAM 4502 en su interior
+    a partir de `vista_corte`, dibuja líneas cosméticas de rosca IRAM 4520 en su interior
     y coloca cotas de profundidad de roscas y cavidades bien separadas (una por lado, sin solapes).
     """
     det = doc.addObject("TechDraw::DrawViewDetail", f"{prefijo_nombre}_Detalle_{ref_letra}")
@@ -883,7 +865,6 @@ def crear_vista_detalle_roscas_iram(
     r_papel = radio_corte * escala_detalle
     escala = float(getattr(det, "Scale", escala_detalle) or escala_detalle)
 
-    # Identificar roscas y profundidades desde Parametros
     TABLA_ROSCAS = [
         ("m3", 2.5, 3.0, "M3"),
         ("m4", 3.3, 4.0, "M4"),
@@ -928,7 +909,6 @@ def crear_vista_detalle_roscas_iram(
     rosca_izq = None
     rosca_der = None
 
-    # Detectar pares roscados dentro del Detalle
     usados = set()
     for i in range(len(aristas_vert)):
         if i in usados:
@@ -975,7 +955,6 @@ def crear_vista_detalle_roscas_iram(
             if i in usados:
                 break
 
-    # Colocar como máximo 1 cota vertical a la DERECHA y 1 a la IZQUIERDA, más 1 horizontal ARRIBA
     cota_rosca_principal = rosca_der or rosca_izq
     if cota_rosca_principal is not None:
         idx_a, idx_b, x_mid, y0, y1, etiq, len_real = cota_rosca_principal
@@ -989,7 +968,6 @@ def crear_vista_detalle_roscas_iram(
         dim_r.Y = max(-r_papel + 4.0, min(r_papel - 4.0, 0.5 * (y0 + y1)))
         cotas_det.append(dim_r)
 
-        # Cota horizontal arriba del detalle indicando Ø de mecha de la rosca
         for idx_h, dx_h, yh, xh0, xh1 in aristas_horiz:
             if abs(xh0 - min(x_mid, xh0)) < 10.0 and abs((dx_h / escala) - 2.5) <= 1.0 and abs(yh - y1) < 0.3:
                 dim_d = doc.addObject("TechDraw::DrawViewDimension", f"{prefijo_nombre}_Det{ref_letra}_Diam")
@@ -1003,7 +981,6 @@ def crear_vista_detalle_roscas_iram(
                 cotas_det.append(dim_d)
                 break
 
-    # A la izquierda del detalle: 1 cota de profundidad de cavidad/escalón (sin chocar con la derecha)
     for val_mm in profs_internas:
         cand = [
             (idx, len_p, x, y0, y1)
@@ -1056,7 +1033,6 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
     alto_tabla = 8.0 + n_filas * alto_fila
     W = ancho_mm
 
-    # Envolver notas técnicas al ancho útil de la caja
     max_chars_nota = max(32, int((W - 6.0) / (2.15 * 0.58)))
     lineas_notas = []
     for nota in notas_taller or []:
@@ -1068,7 +1044,6 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
     alto_notas = (6.0 + len(lineas_notas) * 3.6) if lineas_notas else 0.0
     H = alto_tabla + alto_notas + 2.0
 
-    # Columnas: [0.5..26.0] Símbolo | [26.0..46.5] Valor | [46.5..W-0.5] Descripción
     x_div1 = 26.0
     x_div2 = 46.5
     x_val_end = 45.0
@@ -1079,7 +1054,7 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W:.1f}mm" height="{H:.1f}mm" viewBox="0 0 {W:.1f} {H:.1f}">',
         f'<rect x="0.5" y="0.5" width="{W - 1.0:.1f}" height="{alto_tabla - 0.5:.1f}" fill="#ffffff" stroke="#000000" stroke-width="0.45"/>',
         f'<rect x="0.5" y="0.5" width="{W - 1.0:.1f}" height="6.5" fill="#eaeff5" stroke="#000000" stroke-width="0.45"/>',
-        f'<text x="{W / 2:.1f}" y="4.8" font-family="Liberation Sans, Arial, sans-serif" font-size="{2.9 if W >= 130 else 2.4:.1f}" font-weight="bold" text-anchor="middle">CUADRO DE COTAS FUNCIONALES, ROSCAS Y TOLERANCIAS (IRAM 4503)</text>',
+        f'<text x="{W / 2:.1f}" y="4.8" font-family="Liberation Sans, Arial, sans-serif" font-size="{2.9 if W >= 130 else 2.4:.1f}" font-weight="bold" text-anchor="middle">CUADRO DE COTAS FUNCIONALES, ROSCAS Y TOLERANCIAS (IRAM 4513)</text>',
         f'<line x1="{x_div1:.1f}" y1="7.0" x2="{x_div1:.1f}" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
         f'<line x1="{x_div2:.1f}" y1="7.0" x2="{x_div2:.1f}" y2="{alto_tabla:.1f}" stroke="#000000" stroke-width="0.25"/>',
     ]
@@ -1092,7 +1067,7 @@ def generar_svg_bloque_cotas_pieza(filas_parametros, notas_taller, ancho_mm=98.0
                 f'<line x1="0.5" y1="{y_top:.2f}" x2="{W - 0.5:.1f}" y2="{y_top:.2f}" stroke="#cccccc" stroke-width="0.20"/>'
             )
         simb_corta = _truncar_texto(simbolo, x_div1 - 3.0, 2.25)
-        val_corta = _truncar_texto(valor_unid, x_div2 - x_div1 - 2.5, 2.35)
+        val_corta = _truncar_texto(str(valor_unid).replace(".", ","), x_div2 - x_div1 - 2.5, 2.35)
         desc_corta = _truncar_texto(descripcion, w_desc, 2.15)
         lineas.append(
             f'<text x="2.0" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.25" font-weight="bold">{_escapar_xml(simb_corta)}</text>'
@@ -1137,8 +1112,6 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
     H = alto_tabla + alto_bul + 4.0
     W = ancho_mm
 
-    # Columnas:
-    # [0..16] N° Ítem | [16..34] Cant. | [34..115] Denominación / Pieza | [115..160] Plano / Ref. | [160..235] Material | [235..345] Norma / Código Comercial / Detalles | [345..384] Masa Unit. (g)
     cols_x = [16.0, 34.0, 115.0, 160.0, 235.0, 345.0]
 
     svg = [
@@ -1209,13 +1182,13 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
         svg.append(
             f'<text x="237.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.45">{_escapar_xml(_truncar_texto(it["detalles"], 105.5, 2.45))}</text>'
         )
+        masa_str = f"{it['masa_g']:.1f}".replace(".", ",")
         svg.append(
-            f'<text x="381.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6" text-anchor="end">{it["masa_g"]:.1f}</text>'
+            f'<text x="381.5" y="{y_txt:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.6" text-anchor="end">{masa_str}</text>'
         )
 
-    # --- FILA DESTACADA DE PESO TOTAL DEL ENSAMBLAJE ---
     y_tot = alto_cabecera + n_items * alto_fila
-    masa_total_kg = masa_total_piezas_g / 1000.0
+    masa_total_kg = f"{masa_total_piezas_g / 1000.0:.2f}".replace(".", ",")
     svg.append(
         f'<rect x="0.8" y="{y_tot:.2f}" width="{W - 1.6:.1f}" height="{alto_fila_total:.2f}" fill="#e3ecf6" stroke="none"/>'
     )
@@ -1238,7 +1211,7 @@ def generar_svg_tabla_bom_iram(items_bom, resumen_buloneria, ancho_mm=385.0):
         f'<text x="38.0" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.1" font-weight="bold">PESO TOTAL ESTIMADO DEL CONJUNTO MECÁNICO (BOMBA ARMADA COMPLETA)</text>'
     )
     svg.append(
-        f'<text x="381.5" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.2" font-weight="bold" text-anchor="end">{masa_total_kg:.2f} kg ({masa_total_piezas_g:.0f} g)</text>'
+        f'<text x="381.5" y="{y_tot + 4.6:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="3.2" font-weight="bold" text-anchor="end">{masa_total_kg} kg ({masa_total_piezas_g:.0f} g)</text>'
     )
 
     if resumen_buloneria:
