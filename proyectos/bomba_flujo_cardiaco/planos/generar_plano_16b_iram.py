@@ -126,35 +126,43 @@ def generar_svg_datum_a():
     </svg>"""
 
 
-def buscar_referencias_rebajes_det_b(vista_det_b):
+def buscar_aristas_detalle_b(vista_det_b):
     """
-    Obtiene los pares de vértices simétricos para acotar ⌀41 (x = ±20.5 en modelo / ±41 en escala 2:1)
-    y ⌀45,1 (x = ±22.55 en modelo / ±45.1 en escala 2:1) en Detalle B sin repetir la misma arista.
+    Detecta geométricamente en Detalle B (escala 2:1) las 4 aristas exactas:
+    - edge_tabique: pared vertical del tabique central (dx ~ 0, dy = 6.0 mm en papel o 3.0 mm base)
+    - edge_diam15: arista horizontal del agujero central ⌀15 H7 (dx = 30.0 mm en papel o 15.0 mm base)
+    - edge_reb41: escalón horizontal inferior de ⌀41 (dx ~ 27.85 mm en papel o 13.93 mm base)
+    - edge_reb45: escalón horizontal intermedio de ⌀45,1 (dx ~ 31.87 mm en papel o 15.94 mm base)
     """
-    ref_41 = [(vista_det_b, "Edge34")]
-    ref_45 = [(vista_det_b, "Edge34")]
+    edge_tabique = "Edge34"
+    edge_diam15 = "Edge28"
+    edge_reb41 = "Edge24"
+    edge_reb45 = "Edge25"
     try:
-        vs = vista_det_b.getVisibleVertexes()
-        izq_41, der_41 = [], []
-        izq_45, der_45 = [], []
-        for idx, v in enumerate(vs):
-            ax = abs(v.x)
-            # Soportar coordenadas de vista tanto en escala modelo (20.5 / 22.55) como papel 2:1 (41.0 / 45.1)
-            if (19.8 <= ax <= 21.2) or (39.6 <= ax <= 42.4):
-                (izq_41 if v.x < 0 else der_41).append((v.y, idx))
-            elif (21.8 <= ax <= 23.3) or (43.6 <= ax <= 46.6):
-                (izq_45 if v.x < 0 else der_45).append((v.y, idx))
-        if izq_41 and der_41:
-            izq_41.sort()
-            der_41.sort()
-            ref_41 = [(vista_det_b, f"Vertex{izq_41[0][1]}"), (vista_det_b, f"Vertex{der_41[0][1]}")]
-        if izq_45 and der_45:
-            izq_45.sort()
-            der_45.sort()
-            ref_45 = [(vista_det_b, f"Vertex{izq_45[0][1]}"), (vista_det_b, f"Vertex{der_45[0][1]}")]
+        edges = vista_det_b.getVisibleEdges()
+        candidatos_vert = []
+        for idx, e in enumerate(edges):
+            bb = e.BoundBox
+            dx = bb.XLength
+            dy = bb.YLength
+            # 1. Arista vertical del tabique de 3 mm (6.0 mm en escala 2:1)
+            if dx < 0.2 and (2.8 <= dy <= 3.2 or 5.7 <= dy <= 6.3):
+                candidatos_vert.append((bb.XMin, f"Edge{idx}"))
+            # 2. Aristas horizontales completas (simétricas respecto a X = 0)
+            elif dy < 0.2 and abs(bb.XMin + bb.XMax) < 1.5:
+                if (14.7 <= dx <= 15.3) or (29.5 <= dx <= 30.5):
+                    edge_diam15 = f"Edge{idx}"
+                elif (13.5 <= dx <= 14.3) or (27.0 <= dx <= 28.6):
+                    edge_reb41 = f"Edge{idx}"
+                elif (15.5 <= dx <= 16.4) or (31.0 <= dx <= 32.8):
+                    edge_reb45 = f"Edge{idx}"
+        if candidatos_vert:
+            # Preferir la pared vertical izquierda para acotar a la izquierda del círculo
+            candidatos_vert.sort(key=lambda item: item[0])
+            edge_tabique = candidatos_vert[0][1]
     except Exception:
         pass
-    return ref_41, ref_45
+    return edge_tabique, edge_diam15, edge_reb41, edge_reb45
 
 
 def construir_plano_tapa_interior_16b():
@@ -394,10 +402,11 @@ def construir_plano_tapa_interior_16b():
     # -------------------------------------------------------------------------
     agregar_cota("Cota_03_PCD_CorMed", "DistanceX", [(v_planta, "Vertex81"), (v_planta, "Vertex78")], "6x M3 en ⌀130 prof. 4",   0.0,  47.0)
     agregar_cota("Cota_03_PCD_CorExt", "DistanceX", [(v_planta, "Vertex11"), (v_planta, "Vertex17")], "6x M3 en ⌀152,5 prof. 6", 0.0,  55.0)
-    agregar_cota("Cota_03_PCD_Guias",  "DistanceX", [(v_planta, "Vertex23"), (v_planta, "Vertex26")], "⌀75",                     0.0, -45.0)
+    agregar_cota("Cota_03_PCD_Guias",  "DistanceX", [(v_planta, "Vertex23"), (v_planta, "Vertex26")], "⌀75",                     0.0, -46.0)
 
-    agregar_cota("Cota_03_Guia_Paso",   "Diameter", [(v_planta, "Edge7")],  "2x ⌀10,1 H7",      52.0, -18.0)
-    agregar_cota("Cota_03_Puertos_G18", "Diameter", [(v_planta, "Edge23")], "2x G 1/8 prof. 8", -52.0, -26.0)
+    # Desplazadas a Y = -30.0 y Y = -38.0 para no tocar las letras 'A' de las flechas de corte
+    agregar_cota("Cota_03_Guia_Paso",   "Diameter", [(v_planta, "Edge7")],  "2x ⌀10,1 H7",      52.0, -30.0)
+    agregar_cota("Cota_03_Puertos_G18", "Diameter", [(v_planta, "Edge23")], "2x G 1/8 prof. 8", -52.0, -38.0)
     agregar_cota("Cota_03_Puerto_M12",  "Diameter", [(v_planta, "Edge9")],  "M12x1 (a 45°)",     44.0,  26.0)
     agregar_texto("Txt_Ang_45", ["45°"], 157.0, 123.5, 3.5)
 
@@ -411,11 +420,11 @@ def construir_plano_tapa_interior_16b():
     # -------------------------------------------------------------------------
     # 11. COTAS DE DETALLE B (2:1) - Radio círculo en hoja = 21.0 mm
     # -------------------------------------------------------------------------
-    ref_41, ref_45 = buscar_referencias_rebajes_det_b(det_b)
-    agregar_cota("Cota_DetB_Esp_Tabique",  "DistanceY", [(det_b, "Edge30")], "3",     -26.0,   5.0)
-    agregar_cota("Cota_DetB_Diam_Central", "DistanceX", [(det_b, "Edge27")], "⌀15 H7",  0.0,  26.0)
-    agregar_cota("Cota_DetB_Diam_Reb2",    "DistanceX", ref_41,              "⌀41",     0.0, -25.0)
-    agregar_cota("Cota_DetB_Diam_Reb1",    "DistanceX", ref_45,              "⌀45,1",   0.0, -33.5)
+    e_tab, e_d15, e_r41, e_r45 = buscar_aristas_detalle_b(det_b)
+    agregar_cota("Cota_DetB_Esp_Tabique",  "DistanceY", [(det_b, e_tab)], "3",     -26.0,  -4.0)
+    agregar_cota("Cota_DetB_Diam_Central", "DistanceX", [(det_b, e_d15)], "⌀15 H7",  0.0,  25.0)
+    agregar_cota("Cota_DetB_Diam_Reb2",    "DistanceX", [(det_b, e_r41)], "⌀41",     0.0, -25.0)
+    agregar_cota("Cota_DetB_Diam_Reb1",    "DistanceX", [(det_b, e_r45)], "⌀45,1",   0.0, -33.0)
 
     # -------------------------------------------------------------------------
     # 12. CAMPOS DEL RÓTULO IRAM 4508
