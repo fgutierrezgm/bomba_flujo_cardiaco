@@ -48,7 +48,6 @@
       <!-- Círculos concéntricos a la derecha (vista lateral izquierda proyectada a la derecha en ISO-E) -->
       <circle cx="453.50" cy="394.50" r="3.2" stroke-width="0.45"/>
       <circle cx="453.50" cy="394.50" r="1.8" stroke-width="0.35"/>
-      <text x="448.00" y="399.40" font-family="Liberation Sans, Arial, sans-serif" font-size="2.0" text-anchor="middle" stroke="none" fill="#000">ISO-E (IRAM)</text>
     </g>
     
 

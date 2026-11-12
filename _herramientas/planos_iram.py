@@ -128,7 +128,6 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
       <!-- Círculos concéntricos a la derecha (vista lateral izquierda proyectada a la derecha en ISO-E) -->
       <circle cx="{sx + 5.5:.2f}" cy="{sy:.2f}" r="3.2" stroke-width="0.45"/>
       <circle cx="{sx + 5.5:.2f}" cy="{sy:.2f}" r="1.8" stroke-width="0.35"/>
-      <text x="{sx:.2f}" y="{sy + 4.9:.2f}" font-family="Liberation Sans, Arial, sans-serif" font-size="2.0" text-anchor="middle" stroke="none" fill="#000">ISO-E (IRAM)</text>
     </g>
     """
 
