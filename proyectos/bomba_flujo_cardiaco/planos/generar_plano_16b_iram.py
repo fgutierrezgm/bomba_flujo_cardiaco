@@ -3,19 +3,21 @@
 Generador del Plano N° 16b (Tapa Interior Intermedia) bajo normas IRAM:
 - IRAM 4501: Método ISO-E (Primer Diedro) con corte frontal A-A ARRIBA y vista circular DEBAJO.
 - IRAM 4502: Ejes de simetría (tipo G) y círculos primitivos de centros (PCD).
-- IRAM 4509: Rayado a 45° continuo en toda sección maciza y en detalles.
+- IRAM 4509: Rayado a 45° continuo sin desborde fuera de círculos de detalle.
 - IRAM 4513: Acotación directa en vistas sin tabla de variables de código; coma decimal.
-- IRAM 4515: Tolerancia geométrica de paralelismo [ // | 0,05 | A ].
-- IRAM 4517: Acabado superficial Ra 3,2 general y Ra 0,8 en asientos de sellos.
-- IRAM 4520: Representación normalizada de roscas M3, G 1/8 y M12x1.
-- IRAM 4508: Rótulo reglamentario con símbolo gráfico ISO-E.
+             Cotas visibles (Arbitrary = True), escalonadas a paso uniforme de 8 mm.
+- IRAM 4515: Tolerancia geométrica de paralelismo [ // | 0,05 | A ] con símbolo Datum A en base.
+- IRAM 4517: Acabado superficial Ra 3,2 general y Ra 0,8 en asientos de sellos, sin pisar trazo.
+- IRAM 4520: Representación normalizada de roscas M3 (con mecha a 120°), G 1/8 y M12x1.
+- IRAM 4508: Rótulo reglamentario con símbolo gráfico ISO-E y textos sin solapamiento.
 - Dos Vistas de Detalle ampliadas 2:1:
-    * Detalle A (2:1): Escalón exterior, resalte Ø145 x 4,5, cavidad 1 (Ø120,1 x 6,9) y roscas M3.
-    * Detalle B (2:1): Zona central (Detalle AF), rebajes traseros Ø45,1 x 2,31 y Ø41 x 9,69,
+    * Detalle A (2:1): Escalón exterior, resalte Ø145 x 4,5, rosca M3 con punta de mecha a 120°.
+    * Detalle B (2:1): Zona central (Detalle AF), rebajes traseros Ø45,1 y Ø41,
                        tabique central de 3 mm y pasaje central Ø15 H7.
 """
 import os
 import sys
+import math
 import FreeCAD as App
 import Part
 
@@ -35,6 +37,7 @@ from planos_iram import (
 
 
 def generar_svg_notas_y_tolerancias_16b(ancho_mm=200.0, alto_mm=45.0):
+    """Bloque inferior izquierdo de especificaciones técnicas según IRAM 4515 y 4517."""
     W = ancho_mm
     H = alto_mm
     svg = [
@@ -54,33 +57,45 @@ def generar_svg_notas_y_tolerancias_16b(ancho_mm=200.0, alto_mm=45.0):
         '</g>',
         '<text x="37.0" y="14.2" font-family="Liberation Sans, Arial, sans-serif" font-size="2.2">Paralelismo entre cara superior y cara base inferior A (IRAM 4515)</text>',
         
-        # Símbolos de acabado superficial (IRAM 4517)
+        # Símbolos de acabado superficial (IRAM 4517: texto elevado 2.2 mm para no tocar trazo)
         '<g transform="translate(4.0, 18.5)">',
         '<path d="M 0 5 L 3 9 L 8 0" fill="none" stroke="#000000" stroke-width="0.35"/>',
         '<line x1="4.5" y1="0" x2="16.0" y2="0" stroke="#000000" stroke-width="0.35"/>',
-        '<text x="6.0" y="-1.0" font-family="Liberation Sans, Arial, sans-serif" font-size="2.3" font-weight="bold">Ra 3,2</text>',
+        '<text x="6.5" y="-2.2" font-family="Liberation Sans, Arial, sans-serif" font-size="2.3" font-weight="bold">Ra 3,2</text>',
         '<text x="18.0" y="6.0" font-family="Liberation Sans, Arial, sans-serif" font-size="2.2">Rugosidad general de mecanizado (caras torneadas y fresadas)</text>',
         '</g>',
 
         '<g transform="translate(4.0, 28.5)">',
         '<path d="M 0 5 L 3 9 L 8 0" fill="none" stroke="#000000" stroke-width="0.35"/>',
         '<line x1="4.5" y1="0" x2="16.0" y2="0" stroke="#000000" stroke-width="0.35"/>',
-        '<text x="6.0" y="-1.0" font-family="Liberation Sans, Arial, sans-serif" font-size="2.3" font-weight="bold">Ra 0,8</text>',
+        '<text x="6.5" y="-2.2" font-family="Liberation Sans, Arial, sans-serif" font-size="2.3" font-weight="bold">Ra 0,8</text>',
         '<text x="18.0" y="6.0" font-family="Liberation Sans, Arial, sans-serif" font-size="2.2">Asientos estáticos de junta tórica (Ø120,1 H8) y tubo de vidrio (Ø110,5 H7)</text>',
         '</g>',
 
         '<line x1="0.5" y1="36.0" x2="' + str(W - 0.5) + '" y2="36.0" stroke="#cccccc" stroke-width="0.25"/>',
         '<text x="4.0" y="40.0" font-family="Liberation Sans, Arial, sans-serif" font-size="2.1">• Tolerancias dimensionales generales según ISO 2768-mK. Roscas métricas según ISO 68-1 / IRAM 5003.</text>',
-        '<text x="4.0" y="43.2" font-family="Liberation Sans, Arial, sans-serif" font-size="2.1">• Material: Acero Inoxidable AISI 304 / PVC Rígido. Matar filos vivos 0,2 x 45°.</text>',
+        '<text x="4.0" y="43.2" font-family="Liberation Sans, Arial, sans-serif" font-size="2.1">• Material: Acero Inoxidable AISI 304. Matar filos vivos 0,2 x 45°.</text>',
         '</svg>'
     ]
     return "\n".join(svg)
 
 
+def generar_svg_datum_a():
+    """Símbolo de referencia Datum A según IRAM 4515."""
+    return """<svg xmlns="http://www.w3.org/2000/svg" width="14mm" height="18mm" viewBox="0 0 14 18">
+      <!-- Triángulo equilátero apoyado sobre la cara base inferior -->
+      <polygon points="7,0 3,6 11,6" fill="#000000" stroke="#000000" stroke-width="0.35"/>
+      <line x1="7" y1="6" x2="7" y2="10" stroke="#000000" stroke-width="0.45"/>
+      <!-- Cuadro de referencia Datum A -->
+      <rect x="4" y="10" width="6" height="6" fill="#ffffff" stroke="#000000" stroke-width="0.45"/>
+      <text x="7" y="14.8" font-family="Liberation Sans, Arial, sans-serif" font-size="4.0" font-weight="bold" text-anchor="middle">A</text>
+    </svg>"""
+
+
 def construir_plano_tapa_interior_16b():
     print("Iniciando generación de Plano N° 16b (Tapa Interior Intermedia) IRAM...")
     
-    # Asegurar plantillas IRAM
+    # Asegurar plantillas IRAM con rótulo y símbolo ISO-E corregidos
     rutas_plantillas = asegurar_plantillas_iram(os.path.join(RAIZ, "_plantillas"))
     
     # Abrir modelo 3D de la pieza
@@ -92,7 +107,7 @@ def construir_plano_tapa_interior_16b():
         doc_pieza.recompute()
     sol_obj = doc_pieza.getObject("Tapa_Interior_Solido")
     shape_pieza = sol_obj.Shape.copy()
-    masa_g = (shape_pieza.Volume * 1e-9) * 7850.0 * 1000.0  # AISI 304 (~518 g)
+    masa_g = (shape_pieza.Volume * 1e-9) * 7850.0 * 1000.0  # AISI 304 (~3180 g)
     App.closeDocument(doc_pieza.Name)
 
     # Si el documento ya está abierto en la GUI de FreeCAD, cerrarlo primero
@@ -119,7 +134,7 @@ def construir_plano_tapa_interior_16b():
     page.Template = tpl
 
     # -------------------------------------------------------------------------
-    # 1. VISTA SUPERIOR CIRCULAR (BASE DE LA PROYECCIÓN)
+    # 1. VISTA SUPERIOR CIRCULAR (BASE DE LA PROYECCIÓN ISO-E: ABAJO)
     # -------------------------------------------------------------------------
     v_planta = doc_plano.addObject("TechDraw::DrawViewPart", "VP_03_Planta")
     page.addView(v_planta)
@@ -151,6 +166,10 @@ def construir_plano_tapa_interior_16b():
     v_corte.X = 130.0
     v_corte.Y = 212.0
     v_corte.Caption = "SECCIÓN A - A"
+    v_corte.FuseBeforeCut = True
+    v_corte.CutSurfaceDisplay = "SvgHatch"
+    v_corte.FileHatchPattern = "/snap/freecad/2926/usr/share/Mod/TechDraw/Patterns/hatch45R.svg"
+    v_corte.HatchScale = 1.0
     estilizar_vista_iram(v_corte, mostrar_ocultas=False, mostrar_centros=True)
 
     # -------------------------------------------------------------------------
@@ -200,13 +219,20 @@ def construir_plano_tapa_interior_16b():
     estilizar_vista_iram(v_iso, mostrar_ocultas=False, mostrar_centros=False)
 
     # -------------------------------------------------------------------------
-    # 6. BLOQUE DE ESPECIFICACIONES TÉCNICAS, RUGOSIDAD Y TOLERANCIA IRAM (INFERIOR IZQ.)
+    # 6. BLOQUE DE ESPECIFICACIONES TÉCNICAS (INFERIOR IZQ.) Y DATUM A
     # -------------------------------------------------------------------------
     sym_notas = doc_plano.addObject("TechDraw::DrawViewSymbol", "VP_03_Notas_Tecnicas")
     page.addView(sym_notas)
     sym_notas.Symbol = generar_svg_notas_y_tolerancias_16b(ancho_mm=200.0, alto_mm=45.0)
     sym_notas.X = 130.0
     sym_notas.Y = 36.0
+
+    # Símbolo Datum A apoyado en la base inferior de la pieza en Sección A-A (IRAM 4515)
+    sym_datum = doc_plano.addObject("TechDraw::DrawViewSymbol", "VP_03_Datum_A")
+    page.addView(sym_datum)
+    sym_datum.Symbol = generar_svg_datum_a()
+    sym_datum.X = 165.0
+    sym_datum.Y = 200.0
 
     # Recomputar vistas para generar geometría 2D
     doc_plano.recompute()
@@ -222,12 +248,9 @@ def construir_plano_tapa_interior_16b():
     v_planta.makeCosmeticLine(App.Vector(-26.0, -26.0, 0.0), App.Vector(26.0, 26.0, 0.0), 4, 0.18, (0.2, 0.2, 0.2, 1.0))
     
     # Círculos primitivos de centros (PCD en trazo y punto fino)
-    # d_c75: R = 75 * 0.5 * 0.5 = 18.75 mm
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 18.75, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    # d_cor_med: R = 130 * 0.5 * 0.5 = 32.50 mm
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 32.50, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
-    # d_cor_ext: R = 152.5 * 0.5 * 0.5 = 38.125 mm
-    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 38.125, 4, 0.18, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 18.75, 4, 0.18, (0.0, 0.0, 0.0, 1.0))  # Ø75
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 32.50, 4, 0.18, (0.0, 0.0, 0.0, 1.0))  # Ø130
+    v_planta.makeCosmeticCircle(App.Vector(0.0, 0.0, 0.0), 38.125, 4, 0.18, (0.0, 0.0, 0.0, 1.0)) # Ø152.5
 
     # Cruces de centro en agujeros sobre v_planta
     for xg in (-18.75, 18.75):
@@ -237,152 +260,111 @@ def construir_plano_tapa_interior_16b():
         v_planta.makeCosmeticLine(App.Vector(-3.5, yg, 0.0), App.Vector(3.5, yg, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
         v_planta.makeCosmeticLine(App.Vector(0.0, yg - 3.5, 0.0), App.Vector(0.0, yg + 3.5, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
 
+    # Arco cosmético de cota angular a 45° en v_planta
+    # Arco desde ang = 0 a ang = 45° con radio r = 24.0 mm
+    v_planta.makeCosmeticCircleArc(App.Vector(0.0, 0.0, 0.0), 24.0, 0.0, 45.0, 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    # Flecha y etiqueta 45°
+    v_planta.makeCosmeticLine(App.Vector(24.0, 0.0, 0.0), App.Vector(25.5, 1.2, 0.0), 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+    v_planta.makeCosmeticLine(App.Vector(24.0 * math.cos(math.radians(45)), 24.0 * math.sin(math.radians(45)), 0.0),
+                              App.Vector(22.5 * math.cos(math.radians(43)), 22.5 * math.sin(math.radians(43)), 0.0), 1, 0.25, (0.0, 0.0, 0.0, 1.0))
+
     # En Corte A-A (v_corte):
-    # Eje vertical central
     v_corte.makeCosmeticLine(App.Vector(0.0, -11.0, 0.0), App.Vector(0.0, 11.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
-    # Ejes verticales de guías
     v_corte.makeCosmeticLine(App.Vector(-18.75, -8.0, 0.0), App.Vector(-18.75, 8.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
     v_corte.makeCosmeticLine(App.Vector(18.75, -8.0, 0.0), App.Vector(18.75, 8.0, 0.0), 4, 0.18, (0.0, 0.0, 0.0, 1.0))
 
     # En Detalle B (det_b):
-    # Eje vertical central ampliado 2:1
     det_b.makeCosmeticLine(App.Vector(0.0, -18.0, 0.0), App.Vector(0.0, 18.0, 0.0), 4, 0.20, (0.0, 0.0, 0.0, 1.0))
 
     # -------------------------------------------------------------------------
-    # 8. COTAS DEL CORTE LONGITUDINAL A-A (IRAM 4513)
+    # 8. REPRESENTACIÓN NORMALIZADA DE ROSCAS EN DETALLE A (IRAM 4520)
     # -------------------------------------------------------------------------
-    # Diámetros concéntricos escalonados ARRIBA del corte
-    cotas_corte = [
-        # (Nombre, Tipo, Ref1, Ref2, Formato, X, Y)
-        ("Cota_03_Diam_Ext", "DistanceX", "Vertex0", "Vertex3", "⌀160", 0.0, -23.5),
-        ("Cota_03_Diam_Enc", "DistanceX", "Vertex13", "Vertex49", "⌀145", 0.0, -17.5),
-        ("Cota_03_Diam_Cav1", "DistanceX", "Vertex18", "Vertex44", "⌀120,1 H8", 0.0, -11.5),
-        ("Cota_03_Diam_Cav2", "DistanceX", "Vertex20", "Vertex42", "⌀110,5 H7", 0.0, -5.5),
-        # Altura total y base a la derecha
-        ("Cota_03_Alt_Total", "DistanceY", "Vertex2", "Vertex49", "30", 52.0, 0.0),
-        ("Cota_03_Alt_Base", "DistanceY", "Vertex2", "Vertex3", "25,5", 44.0, 1.1),
-    ]
-    for nom, tipo, r1, r2, fmt, dx, dy in cotas_corte:
+    # Líneas de filete nominal M3 (fina 0.18 mm a r = 1.5 mm -> 3.0 mm en 2:1)
+    # Mecha a 120° en el fondo del agujero M3 (z = 10.0 en vista)
+    det_a.makeCosmeticLine(App.Vector(-14.50, 10.0, 0.0), App.Vector(-12.0, 11.44, 0.0), 1, 0.35, (0.0, 0.0, 0.0, 1.0))
+    det_a.makeCosmeticLine(App.Vector(-9.50, 10.0, 0.0), App.Vector(-12.0, 11.44, 0.0), 1, 0.35, (0.0, 0.0, 0.0, 1.0))
+    # Líneas finas laterales de rosca nominal M3
+    det_a.makeCosmeticLine(App.Vector(-15.0, 2.0, 0.0), App.Vector(-15.0, 10.0, 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    det_a.makeCosmeticLine(App.Vector(-9.0, 2.0, 0.0), App.Vector(-9.0, 10.0, 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+
+    # Función auxiliar para configurar y activar cotas visibles (IRAM 4513)
+    def agregar_cota(nombre, tipo, refs, fmt, x, y):
         try:
-            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nom)
+            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nombre)
             page.addView(dim)
             dim.Type = tipo
             dim.MeasureType = "Projected"
+            dim.References2D = refs
+            dim.Arbitrary = True       # OBLIGATORIO: activa el renderizado visible de la cadena FormatSpec
+            dim.TheoreticalExact = False
             dim.FormatSpec = fmt
-            dim.References2D = [(v_corte, r1), (v_corte, r2)]
-            dim.X = dx
-            dim.Y = dy
+            dim.X = x
+            dim.Y = y
+            vo = getattr(dim, "ViewObject", None)
+            if vo:
+                try:
+                    vo.Fontsize = 3.5  # Altura normativa IRAM 4503
+                    vo.Color = (0.0, 0.0, 0.0)
+                except Exception:
+                    pass
+            return dim
         except Exception as e:
-            print(f"Aviso en cota {nom}: {e}")
+            print(f"Aviso en cota {nombre}: {e}")
+            return None
 
     # -------------------------------------------------------------------------
-    # 9. COTAS DE LA VISTA CIRCULAR INFERIOR (PCD, GUÍAS, PUERTOS)
+    # 9. COTAS DEL CORTE LONGITUDINAL A-A (IRAM 4513)
     # -------------------------------------------------------------------------
-    cotas_planta = [
-        ("Cota_03_PCD_CorExt", "DistanceX", "Vertex11", "Vertex17", "6x M3 en ⌀152,5 prof. 6", 0.0, 43.5),
-        ("Cota_03_PCD_CorMed", "DistanceX", "Vertex81", "Vertex78", "6x M3 en ⌀130 prof. 4", 0.0, 36.5),
-        ("Cota_03_PCD_Guias", "DistanceX", "Vertex23", "Vertex26", "⌀75 (PCD)", 0.0, -23.5),
-    ]
-    for nom, tipo, r1, r2, fmt, dx, dy in cotas_planta:
-        try:
-            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nom)
-            page.addView(dim)
-            dim.Type = tipo
-            dim.MeasureType = "Projected"
-            dim.FormatSpec = fmt
-            dim.References2D = [(v_planta, r1), (v_planta, r2)]
-            dim.X = dx
-            dim.Y = dy
-        except Exception as e:
-            print(f"Aviso en {nom}: {e}")
+    # A. Diámetros concéntricos escalonados ARRIBA del corte (paso de 6 mm)
+    agregar_cota("Cota_03_Diam_Ext", "DistanceX", [(v_corte, "Vertex0"), (v_corte, "Vertex3")], "⌀160", 0.0, -25.5)
+    agregar_cota("Cota_03_Diam_Enc", "DistanceX", [(v_corte, "Vertex13"), (v_corte, "Vertex49")], "⌀145", 0.0, -19.5)
+    agregar_cota("Cota_03_Diam_Cav1", "DistanceX", [(v_corte, "Vertex18"), (v_corte, "Vertex44")], "⌀120,1 H8", 0.0, -13.5)
+    agregar_cota("Cota_03_Diam_Cav2", "DistanceX", [(v_corte, "Vertex20"), (v_corte, "Vertex42")], "⌀110,5 H7", 0.0, -7.5)
 
-    # Diámetros directos de agujeros en planta
-    cotas_planta_circ = [
-        ("Cota_03_Guia_Paso", "Diameter", "Edge8", "2x ⌀10,1 H7", 28.0, 8.0),
-        ("Cota_03_Puerto_M12", "Diameter", "Edge9", "M12x1 (a 45°)", 25.0, -25.0),
-        ("Cota_03_Puertos_G18", "Diameter", "Edge19", "2x G 1/8 prof. 8", -18.0, 28.0),
-    ]
-    for nom, tipo, ref, fmt, dx, dy in cotas_planta_circ:
-        try:
-            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nom)
-            page.addView(dim)
-            dim.Type = tipo
-            dim.MeasureType = "Projected"
-            dim.FormatSpec = fmt
-            dim.References2D = [(v_planta, ref)]
-            dim.X = dx
-            dim.Y = dy
-        except Exception as e:
-            print(f"Aviso en {nom}: {e}")
+    # B. Profundidades de cavidades superiores y resalte a la IZQUIERDA (paso constante de 8 mm)
+    # x = -40 es el contorno izquierdo
+    agregar_cota("Cota_03_Alt_Enc", "DistanceY", [(v_corte, "Vertex13"), (v_corte, "Vertex0")], "4,5", -48.0, -6.37)
+    agregar_cota("Cota_03_Prof_Cav1", "DistanceY", [(v_corte, "Vertex18"), (v_corte, "Vertex19")], "6,9", -56.0, -5.77)
+    agregar_cota("Cota_03_Prof_Cav2", "DistanceY", [(v_corte, "Vertex20"), (v_corte, "Vertex21")], "8,1", -64.0, -2.02)
+
+    # C. Alturas y profundidades de rebajes traseros a la DERECHA (paso constante de 8 mm)
+    # x = +40 es el contorno derecho
+    agregar_cota("Cota_03_Prof_Reb1", "DistanceY", [(v_corte, "Vertex53"), (v_corte, "Vertex6")], "2,31", 48.0, 6.92)
+    agregar_cota("Cota_03_Prof_Reb2", "DistanceY", [(v_corte, "Vertex6"), (v_corte, "Vertex59")], "12,0", 56.0, 4.50)
+    agregar_cota("Cota_03_Alt_Base", "DistanceY", [(v_corte, "Vertex2"), (v_corte, "Vertex3")], "25,5", 64.0, 1.12)
+    agregar_cota("Cota_03_Alt_Total", "DistanceY", [(v_corte, "Vertex2"), (v_corte, "Vertex49")], "30", 72.0, 0.0)
 
     # -------------------------------------------------------------------------
-    # 10. COTAS DE DETALLE A (2:1): ESCALÓN EXTERIOR Y ROSCAS M3 (CÍRCULO 1)
+    # 10. COTAS DE LA VISTA CIRCULAR INFERIOR (PCD, GUÍAS, PUERTOS)
     # -------------------------------------------------------------------------
-    cotas_deta = [
-        ("Cota_DetA_Alt_Enc", "DistanceY", "Edge24", "4,5", 14.5, -2.0),
-        ("Cota_DetA_Prof_Cav1", "DistanceY", "Edge15", "6,9", -15.5, 9.0),
-        ("Cota_DetA_Prof_M3", "DistanceY", "Edge26", "M3 prof. 4", 5.0, 6.0),
-        ("Cota_DetA_Diam_M3", "DistanceX", "Edge22", "⌀2,5 (mecha)", -12.0, 13.5),
-    ]
-    for nom, tipo, ref, fmt, dx, dy in cotas_deta:
-        try:
-            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nom)
-            page.addView(dim)
-            dim.Type = tipo
-            dim.MeasureType = "Projected"
-            dim.FormatSpec = fmt
-            dim.References2D = [(det_a, ref)]
-            dim.X = dx
-            dim.Y = dy
-        except Exception as e:
-            print(f"Aviso en {nom}: {e}")
+    agregar_cota("Cota_03_PCD_CorExt", "DistanceX", [(v_planta, "Vertex11"), (v_planta, "Vertex17")], "6x M3 en ⌀152,5 prof. 6", 0.0, 44.0)
+    agregar_cota("Cota_03_PCD_CorMed", "DistanceX", [(v_planta, "Vertex81"), (v_planta, "Vertex78")], "6x M3 en ⌀130 prof. 4", 0.0, 36.5)
+    agregar_cota("Cota_03_PCD_Guias", "DistanceX", [(v_planta, "Vertex23"), (v_planta, "Vertex26")], "⌀75 (PCD)", 0.0, -24.0)
 
-    # Rayado cosmético a 45° en Detalle A
-    for yh in range(-8, 14, 3):
-        det_a.makeCosmeticLine(App.Vector(-16.0, float(yh), 0.0), App.Vector(-6.0, float(yh + 10), 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
-        det_a.makeCosmeticLine(App.Vector(2.0, float(yh), 0.0), App.Vector(12.0, float(yh + 10), 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    # Diámetros directos de guías y puertos con directriz
+    agregar_cota("Cota_03_Guia_Paso", "Diameter", [(v_planta, "Edge8")], "2x ⌀10,1 H7", 28.0, 8.0)
+    agregar_cota("Cota_03_Puerto_M12", "Diameter", [(v_planta, "Edge9")], "M12x1 (a 45°)", 26.0, -26.0)
+    agregar_cota("Cota_03_Puertos_G18", "Diameter", [(v_planta, "Edge19")], "2x G 1/8 prof. 8", -18.0, 28.0)
+
+    # Cota angular 45°
+    agregar_cota("Cota_03_Ang_M12", "DistanceX", [(v_planta, "Vertex15"), (v_planta, "Vertex17")], "45°", 22.0, 10.0)
 
     # -------------------------------------------------------------------------
-    # 11. COTAS DE DETALLE B (2:1): ZONA CENTRAL (CÍRCULO 2 / DETALLE AF)
+    # 11. COTAS DE DETALLE A (2:1): ESCALÓN EXTERIOR Y ROSCA M3 (CÍRCULO 1)
     # -------------------------------------------------------------------------
-    cotas_detb = [
-        ("Cota_DetB_Esp_Tabique", "DistanceY", "Edge30", "3", 19.5, 10.0),
-        ("Cota_DetB_Diam_Central", "DistanceX", "Edge27", "⌀15 H7", 0.0, 17.5),
-        ("Cota_DetB_Diam_Reb2", "DistanceX", "Edge34", "⌀41", 0.0, -14.0),
-    ]
-    for nom, tipo, ref, fmt, dx, dy in cotas_detb:
-        try:
-            dim = doc_plano.addObject("TechDraw::DrawViewDimension", nom)
-            page.addView(dim)
-            dim.Type = tipo
-            dim.MeasureType = "Projected"
-            dim.FormatSpec = fmt
-            dim.References2D = [(det_b, ref)]
-            dim.X = dx
-            dim.Y = dy
-        except Exception as e:
-            print(f"Aviso en {nom}: {e}")
-
-    # Cota de profundidad de rebaje trasero 1 (2,31 mm) y diámetro rebaje 1 (Ø45,1)
-    try:
-        dim_reb1 = doc_plano.addObject("TechDraw::DrawViewDimension", "Cota_03_Prof_Reb1")
-        page.addView(dim_reb1)
-        dim_reb1.Type = "DistanceY"
-        dim_reb1.MeasureType = "Projected"
-        dim_reb1.FormatSpec = "2,31"
-        dim_reb1.References2D = [(v_corte, "Vertex53"), (v_corte, "Vertex6")]
-        dim_reb1.X = -18.0
-        dim_reb1.Y = 7.0
-    except Exception as e:
-        print(f"Aviso en Cota_03_Prof_Reb1: {e}")
-
-    # Rayado cosmético a 45° en Detalle B (tabique central macizo)
-    for yh in range(7, 13, 2):
-        det_b.makeCosmeticLine(App.Vector(-15.0, float(yh), 0.0), App.Vector(-11.0, float(yh + 4), 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
-        det_b.makeCosmeticLine(App.Vector(11.0, float(yh), 0.0), App.Vector(15.0, float(yh + 4), 0.0), 1, 0.18, (0.0, 0.0, 0.0, 1.0))
+    agregar_cota("Cota_DetA_Alt_Enc", "DistanceY", [(det_a, "Edge24")], "4,5", 15.0, -2.0)
+    agregar_cota("Cota_DetA_Prof_M3", "DistanceY", [(det_a, "Edge26")], "M3 prof. 4", 5.0, 6.0)
+    agregar_cota("Cota_DetA_Diam_M3", "DistanceX", [(det_a, "Edge22")], "⌀2,5 (mecha)", -12.0, 13.5)
 
     # -------------------------------------------------------------------------
-    # 12. CAMPOS DEL RÓTULO IRAM 4508
+    # 12. COTAS DE DETALLE B (2:1): ZONA CENTRAL (CÍRCULO 2 / DETALLE AF)
+    # -------------------------------------------------------------------------
+    agregar_cota("Cota_DetB_Esp_Tabique", "DistanceY", [(det_b, "Edge30")], "3", 20.0, 10.0)
+    agregar_cota("Cota_DetB_Diam_Central", "DistanceX", [(det_b, "Edge27")], "⌀15 H7", 0.0, 17.5)
+    agregar_cota("Cota_DetB_Diam_Reb2", "DistanceX", [(det_b, "Edge34")], "⌀41", 0.0, -14.0)
+
+    # -------------------------------------------------------------------------
+    # 13. CAMPOS DEL RÓTULO IRAM 4508
     # -------------------------------------------------------------------------
     campos_rotulo = {
         "TITULO": "Tapa Interior Intermedia",
@@ -390,7 +372,7 @@ def construir_plano_tapa_interior_16b():
         "HOJA": "1/1",
         "FORMATO": "IRAM A3",
         "ESCALA": "1:2",
-        "MATERIAL": "AISI 304 / PVC",
+        "MATERIAL": "Acero Inox. AISI 304",
         "MASA": f"{masa_g:.0f} g",
         "TOL_GRAL": "ISO 2768-mK",
         "AUTOR": "Dib.: F. Gutiérrez",
@@ -411,14 +393,20 @@ def construir_plano_tapa_interior_16b():
     doc_plano.saveAs(salida_fcstd)
     print(f"Plano 16b guardado exitosamente: {salida_fcstd}")
     
-    # Si estamos en modo headless, cerramos; si estamos en GUI activa, dejamos la página en pantalla
-    if not App.GuiUp:
-        App.closeDocument(doc_plano.Name)
+    # En entorno con interfaz gráfica, ajustar zoom
+    if App.GuiUp:
+        try:
+            import FreeCADGui as Gui
+            Gui.ActiveDocument.ActiveView.fitAll()
+        except Exception:
+            pass
     else:
-        import FreeCADGui as Gui
-        Gui.ActiveDocument.ActiveView.fitAll()
+        App.closeDocument(doc_plano.Name)
 
     return salida_fcstd
 
 
-construir_plano_tapa_interior_16b()
+if __name__ == "__main__":
+    construir_plano_tapa_interior_16b()
+else:
+    construir_plano_tapa_interior_16b()

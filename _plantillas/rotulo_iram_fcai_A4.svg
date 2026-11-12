@@ -41,29 +41,29 @@
     
     <g id="simbolo_iso_e" stroke="#000000" fill="none">
       <!-- Ejes de simetría (línea tipo F: trazo y punto fino) -->
-      <line x1="139.50" y1="184.50" x2="161.50" y2="184.50" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
-      <line x1="156.50" y1="180.00" x2="156.50" y2="189.00" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <line x1="138.50" y1="184.50" x2="160.50" y2="184.50" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <line x1="155.50" y1="180.00" x2="155.50" y2="189.00" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
       <!-- Trapecio (cono truncado vista frontal) -->
-      <polygon points="141.00,181.30 149.50,182.70 149.50,186.30 141.00,187.70" stroke-width="0.45"/>
-      <!-- Círculos concéntricos a la derecha (vista lateral izquierda proyectada a la derecha en ISO-E) -->
-      <circle cx="156.50" cy="184.50" r="3.2" stroke-width="0.45"/>
-      <circle cx="156.50" cy="184.50" r="1.8" stroke-width="0.35"/>
+      <polygon points="140.50,181.50 146.50,183.00 146.50,186.00 140.50,187.50" stroke-width="0.45"/>
+      <!-- Dos círculos concéntricos a la derecha (vista lateral izquierda en ISO-E) -->
+      <circle cx="155.50" cy="184.50" r="3.0" stroke-width="0.45"/>
+      <circle cx="155.50" cy="184.50" r="1.5" stroke-width="0.35"/>
     </g>
     
 
-    <!-- Etiquetas fijas del rótulo -->
-    <g font-family="Liberation Sans, Arial, sans-serif" font-size="2.1" fill="#333333">
-      <text x="113.50" y="181.80">Escala:</text>
-      <text x="113.50" y="192.80">Formato / Hoja:</text>
-      <text x="139.50" y="192.80">Fecha:</text>
-      <text x="165.50" y="181.80">Denominación / Título del Plano:</text>
-      <text x="165.50" y="192.80">Material:</text>
-      <text x="205.50" y="192.80">Tol. Gral. / Masa:</text>
-      <text x="245.50" y="181.80">Dibujó / Revisó:</text>
-      <text x="245.50" y="192.80">Plano Nº:</text>
+    <!-- Etiquetas fijas del rótulo (IRAM 4508: desplazadas a la parte superior de cada celda para evitar solapamiento) -->
+    <g font-family="Liberation Sans, Arial, sans-serif" font-size="1.9" fill="#555555">
+      <text x="114.00" y="181.20">Escala:</text>
+      <text x="114.00" y="192.00">Formato / Hoja:</text>
+      <text x="140.00" y="192.00">Fecha:</text>
+      <text x="166.00" y="181.20">Denominación / Título del Plano:</text>
+      <text x="166.00" y="192.00">Material:</text>
+      <text x="206.00" y="192.00">Tol. Gral. / Masa:</text>
+      <text x="246.00" y="181.20">Dibujó / Revisó:</text>
+      <text x="246.00" y="192.00">Plano Nº:</text>
     </g>
 
-    <!-- Textos editables (sincronizados con hoja Datos_Rotulo) -->
+    <!-- Textos editables (sincronizados con hoja Datos_Rotulo: ubicados en la mitad inferior de celda) -->
     <g font-family="Liberation Sans, Arial, sans-serif" fill="#000000">
       <text freecad:editable="INSTITUCION" x="212.50" y="154.20" font-size="3.3" font-weight="bold" text-anchor="middle"><tspan>Facultad de Ciencias Aplicadas a la Industria - UNCUYO</tspan></text>
       <text freecad:editable="CARRERA" x="167.50" y="161.60" font-size="3.0" text-anchor="middle"><tspan>Ingeniería Mecánica</tspan></text>
@@ -73,26 +73,26 @@
       <text freecad:editable="PROYECTO" x="212.50" y="176.50" font-size="3.1" font-weight="bold" text-anchor="middle"><tspan>Diseño y construcción de una bomba de simulación de flujo cardíaco</tspan></text>
 
       <!-- Escala -->
-      <text freecad:editable="ESCALA" x="125.00" y="187.80" font-size="4.0" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
+      <text freecad:editable="ESCALA" x="125.00" y="188.20" font-size="4.0" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
       <!-- Formato y Hoja -->
-      <text freecad:editable="FORMATO" x="114.00" y="198.00" font-size="2.7" font-weight="bold"><tspan>IRAM A4</tspan></text>
-      <text freecad:editable="HOJA" x="136.50" y="198.00" font-size="2.6" text-anchor="end"><tspan>1/24</tspan></text>
+      <text freecad:editable="FORMATO" x="114.50" y="197.80" font-size="2.7" font-weight="bold"><tspan>IRAM A4</tspan></text>
+      <text freecad:editable="HOJA" x="136.50" y="197.80" font-size="2.6" text-anchor="end"><tspan>1/24</tspan></text>
 
       <!-- Fecha -->
-      <text freecad:editable="FECHA" x="151.00" y="198.00" font-size="2.8" text-anchor="middle"><tspan>10/11/2026</tspan></text>
+      <text freecad:editable="FECHA" x="151.00" y="197.80" font-size="2.8" text-anchor="middle"><tspan>12/11/2026</tspan></text>
 
       <!-- Título de la pieza/conjunto -->
-      <text freecad:editable="TITULO" x="204.00" y="187.60" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
+      <text freecad:editable="TITULO" x="204.00" y="188.20" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
 
       <!-- Material y Masa/Tolerancia -->
-      <text freecad:editable="MATERIAL" x="184.00" y="198.00" font-size="2.7" text-anchor="middle"><tspan>AISI 304</tspan></text>
-      <text freecad:editable="TOL_GRAL" x="205.50" y="196.20" font-size="2.3"><tspan>ISO 2768-mK</tspan></text>
-      <text freecad:editable="MASA" x="205.50" y="199.00" font-size="2.3"><tspan>Masa: - g</tspan></text>
+      <text freecad:editable="MATERIAL" x="184.00" y="197.80" font-size="2.8" font-weight="bold" text-anchor="middle"><tspan>AISI 304</tspan></text>
+      <text freecad:editable="TOL_GRAL" x="206.00" y="195.50" font-size="2.2"><tspan>ISO 2768-mK</tspan></text>
+      <text freecad:editable="MASA" x="206.00" y="198.50" font-size="2.2"><tspan>Masa: - g</tspan></text>
 
       <!-- Autor, Aprobado y Número de Plano -->
-      <text freecad:editable="AUTOR" x="245.50" y="185.60" font-size="2.5"><tspan>Dib.: F. Gutiérrez</tspan></text>
-      <text freecad:editable="APROBADO" x="245.50" y="188.80" font-size="2.5"><tspan>Apr.: Ing. A. Bonino</tspan></text>
-      <text freecad:editable="NUM_PLANO" x="265.50" y="198.20" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
+      <text freecad:editable="AUTOR" x="246.00" y="185.20" font-size="2.3"><tspan>Dib.: F. Gutiérrez</tspan></text>
+      <text freecad:editable="APROBADO" x="246.00" y="188.80" font-size="2.3"><tspan>Apr.: Ing. A. Bonino</tspan></text>
+      <text freecad:editable="NUM_PLANO" x="265.50" y="198.00" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
     </g>
   </g>
 </svg>

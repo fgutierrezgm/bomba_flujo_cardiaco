@@ -121,13 +121,13 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
     simbolo_iso_e = f"""
     <g id="simbolo_iso_e" stroke="#000000" fill="none">
       <!-- Ejes de simetría (línea tipo F: trazo y punto fino) -->
-      <line x1="{sx - 11.5:.2f}" y1="{sy:.2f}" x2="{sx + 10.5:.2f}" y2="{sy:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
-      <line x1="{sx + 5.5:.2f}" y1="{sy - 4.5:.2f}" x2="{sx + 5.5:.2f}" y2="{sy + 4.5:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <line x1="{sx - 12.5:.2f}" y1="{sy:.2f}" x2="{sx + 9.5:.2f}" y2="{sy:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
+      <line x1="{sx + 4.5:.2f}" y1="{sy - 4.5:.2f}" x2="{sx + 4.5:.2f}" y2="{sy + 4.5:.2f}" stroke-width="0.20" stroke-dasharray="3,0.8,0.5,0.8"/>
       <!-- Trapecio (cono truncado vista frontal) -->
-      <polygon points="{sx - 10.0:.2f},{sy - 3.2:.2f} {sx - 1.5:.2f},{sy - 1.8:.2f} {sx - 1.5:.2f},{sy + 1.8:.2f} {sx - 10.0:.2f},{sy + 3.2:.2f}" stroke-width="0.45"/>
-      <!-- Círculos concéntricos a la derecha (vista lateral izquierda proyectada a la derecha en ISO-E) -->
-      <circle cx="{sx + 5.5:.2f}" cy="{sy:.2f}" r="3.2" stroke-width="0.45"/>
-      <circle cx="{sx + 5.5:.2f}" cy="{sy:.2f}" r="1.8" stroke-width="0.35"/>
+      <polygon points="{sx - 10.5:.2f},{sy - 3.0:.2f} {sx - 4.5:.2f},{sy - 1.5:.2f} {sx - 4.5:.2f},{sy + 1.5:.2f} {sx - 10.5:.2f},{sy + 3.0:.2f}" stroke-width="0.45"/>
+      <!-- Dos círculos concéntricos a la derecha (vista lateral izquierda en ISO-E) -->
+      <circle cx="{sx + 4.5:.2f}" cy="{sy:.2f}" r="3.0" stroke-width="0.45"/>
+      <circle cx="{sx + 4.5:.2f}" cy="{sy:.2f}" r="1.5" stroke-width="0.35"/>
     </g>
     """
 
@@ -173,19 +173,19 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
     <!-- Símbolo ISO-E -->
     {simbolo_iso_e}
 
-    <!-- Etiquetas fijas del rótulo -->
-    <g font-family="Liberation Sans, Arial, sans-serif" font-size="2.1" fill="#333333">
-      <text x="{rx + 1.5:.2f}" y="{ry + 32.8:.2f}">Escala:</text>
-      <text x="{rx + 1.5:.2f}" y="{ry + 43.8:.2f}">Formato / Hoja:</text>
-      <text x="{rx + 27.5:.2f}" y="{ry + 43.8:.2f}">Fecha:</text>
-      <text x="{rx + 53.5:.2f}" y="{ry + 32.8:.2f}">Denominación / Título del Plano:</text>
-      <text x="{rx + 53.5:.2f}" y="{ry + 43.8:.2f}">Material:</text>
-      <text x="{rx + 93.5:.2f}" y="{ry + 43.8:.2f}">Tol. Gral. / Masa:</text>
-      <text x="{rx + 133.5:.2f}" y="{ry + 32.8:.2f}">Dibujó / Revisó:</text>
-      <text x="{rx + 133.5:.2f}" y="{ry + 43.8:.2f}">Plano Nº:</text>
+    <!-- Etiquetas fijas del rótulo (IRAM 4508: desplazadas a la parte superior de cada celda para evitar solapamiento) -->
+    <g font-family="Liberation Sans, Arial, sans-serif" font-size="1.9" fill="#555555">
+      <text x="{rx + 2.0:.2f}" y="{ry + 32.2:.2f}">Escala:</text>
+      <text x="{rx + 2.0:.2f}" y="{ry + 43.0:.2f}">Formato / Hoja:</text>
+      <text x="{rx + 28.0:.2f}" y="{ry + 43.0:.2f}">Fecha:</text>
+      <text x="{rx + 54.0:.2f}" y="{ry + 32.2:.2f}">Denominación / Título del Plano:</text>
+      <text x="{rx + 54.0:.2f}" y="{ry + 43.0:.2f}">Material:</text>
+      <text x="{rx + 94.0:.2f}" y="{ry + 43.0:.2f}">Tol. Gral. / Masa:</text>
+      <text x="{rx + 134.0:.2f}" y="{ry + 32.2:.2f}">Dibujó / Revisó:</text>
+      <text x="{rx + 134.0:.2f}" y="{ry + 43.0:.2f}">Plano Nº:</text>
     </g>
 
-    <!-- Textos editables (sincronizados con hoja Datos_Rotulo) -->
+    <!-- Textos editables (sincronizados con hoja Datos_Rotulo: ubicados en la mitad inferior de celda) -->
     <g font-family="Liberation Sans, Arial, sans-serif" fill="#000000">
       <text freecad:editable="INSTITUCION" x="{rx + 100.5:.2f}" y="{ry + 5.2:.2f}" font-size="3.3" font-weight="bold" text-anchor="middle"><tspan>Facultad de Ciencias Aplicadas a la Industria - UNCUYO</tspan></text>
       <text freecad:editable="CARRERA" x="{rx + 55.5:.2f}" y="{ry + 12.6:.2f}" font-size="3.0" text-anchor="middle"><tspan>Ingeniería Mecánica</tspan></text>
@@ -195,26 +195,26 @@ def generar_svg_plantilla_iram_fcai(formato, ruta_salida, ruta_escudo_png):
       <text freecad:editable="PROYECTO" x="{rx + 100.5:.2f}" y="{ry + 27.5:.2f}" font-size="3.1" font-weight="bold" text-anchor="middle"><tspan>Diseño y construcción de una bomba de simulación de flujo cardíaco</tspan></text>
 
       <!-- Escala -->
-      <text freecad:editable="ESCALA" x="{rx + 13.0:.2f}" y="{ry + 38.8:.2f}" font-size="4.0" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
+      <text freecad:editable="ESCALA" x="{rx + 13.0:.2f}" y="{ry + 39.2:.2f}" font-size="4.0" font-weight="bold" text-anchor="middle"><tspan>1:1</tspan></text>
       <!-- Formato y Hoja -->
-      <text freecad:editable="FORMATO" x="{rx + 2.0:.2f}" y="{ry + 49.0:.2f}" font-size="2.7" font-weight="bold"><tspan>IRAM {formato}</tspan></text>
-      <text freecad:editable="HOJA" x="{rx + 24.5:.2f}" y="{ry + 49.0:.2f}" font-size="2.6" text-anchor="end"><tspan>1/24</tspan></text>
+      <text freecad:editable="FORMATO" x="{rx + 2.5:.2f}" y="{ry + 48.8:.2f}" font-size="2.7" font-weight="bold"><tspan>IRAM {formato}</tspan></text>
+      <text freecad:editable="HOJA" x="{rx + 24.5:.2f}" y="{ry + 48.8:.2f}" font-size="2.6" text-anchor="end"><tspan>1/24</tspan></text>
 
       <!-- Fecha -->
-      <text freecad:editable="FECHA" x="{rx + 39.0:.2f}" y="{ry + 49.0:.2f}" font-size="2.8" text-anchor="middle"><tspan>10/11/2026</tspan></text>
+      <text freecad:editable="FECHA" x="{rx + 39.0:.2f}" y="{ry + 48.8:.2f}" font-size="2.8" text-anchor="middle"><tspan>12/11/2026</tspan></text>
 
       <!-- Título de la pieza/conjunto -->
-      <text freecad:editable="TITULO" x="{rx + 92.0:.2f}" y="{ry + 38.6:.2f}" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
+      <text freecad:editable="TITULO" x="{rx + 92.0:.2f}" y="{ry + 39.2:.2f}" font-size="3.8" font-weight="bold" text-anchor="middle"><tspan>Denominación de la Pieza</tspan></text>
 
       <!-- Material y Masa/Tolerancia -->
-      <text freecad:editable="MATERIAL" x="{rx + 72.0:.2f}" y="{ry + 49.0:.2f}" font-size="2.7" text-anchor="middle"><tspan>AISI 304</tspan></text>
-      <text freecad:editable="TOL_GRAL" x="{rx + 93.5:.2f}" y="{ry + 47.2:.2f}" font-size="2.3"><tspan>ISO 2768-mK</tspan></text>
-      <text freecad:editable="MASA" x="{rx + 93.5:.2f}" y="{ry + 50.0:.2f}" font-size="2.3"><tspan>Masa: - g</tspan></text>
+      <text freecad:editable="MATERIAL" x="{rx + 72.0:.2f}" y="{ry + 48.8:.2f}" font-size="2.8" font-weight="bold" text-anchor="middle"><tspan>AISI 304</tspan></text>
+      <text freecad:editable="TOL_GRAL" x="{rx + 94.0:.2f}" y="{ry + 46.5:.2f}" font-size="2.2"><tspan>ISO 2768-mK</tspan></text>
+      <text freecad:editable="MASA" x="{rx + 94.0:.2f}" y="{ry + 49.5:.2f}" font-size="2.2"><tspan>Masa: - g</tspan></text>
 
       <!-- Autor, Aprobado y Número de Plano -->
-      <text freecad:editable="AUTOR" x="{rx + 133.5:.2f}" y="{ry + 36.6:.2f}" font-size="2.5"><tspan>Dib.: F. Gutiérrez</tspan></text>
-      <text freecad:editable="APROBADO" x="{rx + 133.5:.2f}" y="{ry + 39.8:.2f}" font-size="2.5"><tspan>Apr.: Ing. A. Bonino</tspan></text>
-      <text freecad:editable="NUM_PLANO" x="{rx + 153.5:.2f}" y="{ry + 49.2:.2f}" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
+      <text freecad:editable="AUTOR" x="{rx + 134.0:.2f}" y="{ry + 36.2:.2f}" font-size="2.3"><tspan>Dib.: F. Gutiérrez</tspan></text>
+      <text freecad:editable="APROBADO" x="{rx + 134.0:.2f}" y="{ry + 39.8:.2f}" font-size="2.3"><tspan>Apr.: Ing. A. Bonino</tspan></text>
+      <text freecad:editable="NUM_PLANO" x="{rx + 153.5:.2f}" y="{ry + 49.0:.2f}" font-size="4.2" font-weight="bold" text-anchor="middle"><tspan>Plano Nº 1</tspan></text>
     </g>
   </g>
 </svg>
