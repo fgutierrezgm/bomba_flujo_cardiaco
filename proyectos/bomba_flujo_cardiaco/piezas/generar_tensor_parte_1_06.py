@@ -20,7 +20,7 @@ DIMS = [
     ("d_ext",     "Diámetro exterior (22 mm * 0.755)",          "16.61 mm",  "L", None,     "plano"),
     ("c_ext",     "Chaflán en extremo libre (0.50 * 0.755)",    "0.38 mm",   "L", None,     "plano"),
     ("l_espiga",  "Longitud de la espiga triangular macho",     "30.00 mm",  "L", None,     "usuario"),
-    ("r_espiga",  "Radio circunscrito de la espiga triangular", "3.16 mm",   "L", None,     "usuario"),
+    ("r_espiga",  "Radio circunscrito espiga macho (R3,00)",     "3.00 mm",   "L", None,     "usuario"),
     ("d_aguj",    "Diámetro agujero roscado a escala (M10*0.755)", "6.32 mm", "L", None,    "plano"),
     ("p_aguj",    "Profundidad cilíndrica del agujero extremo", "12.08 mm",  "L", None,     "plano"),
     ("p_punta",   "Profundidad punta cónica de mecha (118°)",   "1.90 mm",   "L", None,     "plano"),

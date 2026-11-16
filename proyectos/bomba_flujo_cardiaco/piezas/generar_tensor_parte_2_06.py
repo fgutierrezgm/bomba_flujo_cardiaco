@@ -24,7 +24,7 @@ DIMS = [
     ("d_ext_menor", "Diámetro exterior extremo rebajado (22*0.755)","16.61 mm",  "L", None, "plano"),
     ("c_ext",       "Chaflanes extremos (0.50 * 0.755)",           "0.38 mm",   "L", None, "plano"),
     ("p_cavidad",   "Profundidad cavidad triangular hembra",       "30.00 mm",  "L", None, "usuario"),
-    ("r_espiga",    "Radio circunscrito nominal del triángulo",    "3.16 mm",   "L", None, "usuario"),
+    ("r_espiga",    "Radio circunscrito cavidad hembra (R3,25)",   "3.25 mm",   "L", None, "usuario"),
     ("d_aguj",      "Diámetro agujero roscado a escala (M10*0.755)","6.32 mm",  "L", None, "plano"),
     ("p_aguj",      "Profundidad cilíndrica del agujero extremo",  "12.08 mm",  "L", None, "plano"),
     ("p_punta",     "Profundidad punta cónica de mecha (118°)",    "1.90 mm",   "L", None, "plano"),
@@ -71,14 +71,14 @@ ch_der = pz.cono(
 bruto = pz.fusion("Tensor_P2_Bruto", [ch_izq, cil_menor, ch_esc, cil_mayor, ch_der])
 
 # --- 3. Cavidad triangular hembra en Z = (l_cuerpo - p_cavidad) .. l_cuerpo
-# En Modo 1 suma holgura_fdm por cara para que encastre la espiga sin atascarse
+# Holgura explícita de +0,25 mm en radio (0,125 mm/cara) entre R3,25 hembra y R3,00 macho
 cav_bruta = pz.cil(
     "Cavidad_Cil_Bruta",
     f"{p('r_espiga')} + 2 mm",
     f"{p('p_cavidad')} + 1 mm",
     z=f"{p('l_cuerpo')} - {p('p_cavidad')}",
 )
-apotema_cav = f"({p('r_espiga')} * 0.5 + {p('holgura')})"
+apotema_cav = f"({p('r_espiga')} * 0.5)"
 cortes_tri = []
 for idx_ang, ang in enumerate((0, 120, 240), start=1):
     caja_c = pz.caja(

@@ -110,12 +110,40 @@ def _adaptar_pieza_3d_impresa(pz, nombre, sh_norm, bb):
         cortes.append(pz.cil("Corte_Paso_Transmisor", f"{p('d_paso_transm')} / 2", "24 mm", z="-1 mm"))
         cortes.append(pz.cil("Corte_Aloj_SKF_609", f"{p('d_aloj_609')} / 2", "10 mm", z=p("z_piso_609")))
     elif nombre == "Adaptador_Eje_04_3D":
+        # 1) Rellenar la zona anular de agujeros del STEP original (R=16.5..20.45 mm) para corregir orientación y patrones
+        rell_ext = pz.cil("Rell_Aguj_Ext", "20.45 mm", f"{bb.ZLength:.6f} mm", z="0 mm")
+        rell_int = pz.cil("Rell_Aguj_Int", "16.50 mm", f"{bb.ZLength + 2.0:.6f} mm", z="-1 mm")
+        anillo_rell = pz.corte("Anillo_Relleno_Agujeros", rell_ext, rell_int)
+        base_rell = pz.fusion(f"{nombre}_BaseRellena", [base_step, anillo_rell])
+        base_step.Visibility = False
+        rell_ext.Visibility = False
+        rell_int.Visibility = False
+        anillo_rell.Visibility = False
+        base_step = base_rell
+        # 2) Despejes laterales para arandelas/tuercas de barras guía a 0°/180°
         cortes.append(pz.cil("Corte_Despeje_Guia_1", f"{p('d_despeje_sufr')} / 2", "16 mm",
                              x=f"-1 * {p('x_guia')}", z="-1 mm"))
         cortes.append(pz.cil("Corte_Despeje_Guia_2", f"{p('d_despeje_sufr')} / 2", "16 mm",
                              x=p("x_guia"), z="-1 mm"))
+        # 3) 4x pasantes con cajeado superior (+Z) a 45° para fijación Adaptador_Eje_04_3D -> Tapa_Interior_16b_3D
+        for idx_b, ang_b in enumerate((45, 135, 225, 315), 1):
+            xb = f"({p('d_cor_base')} / 2) * cos({ang_b} deg)"
+            yb = f"({p('d_cor_base')} / 2) * sin({ang_b} deg)"
+            cortes.append(pz.cil(f"Corte_Paso_45_{idx_b}", f"{p('d_paso_45')} / 2", "16 mm",
+                                 x=xb, y=yb, z="-1 mm"))
+            cortes.append(pz.cil(f"Corte_Caj_45_{idx_b}", f"{p('d_caj_45')} / 2", f"{p('p_caj_45')} + 1 mm",
+                                 x=xb, y=yb, z=f"{bb.ZLength:.6f} mm - {p('p_caj_45')}"))
+        # 4) 4x ciegos piloto M2 en cara superior (+Z) a 22.5°+90°k alineados con brida de Adaptador_Rodamiento_03_3D
+        for idx_r, ang_r in enumerate((0, 90, 180, 270), 1):
+            ang_expr = f"({p('ang_rosca_0')} + {ang_r} deg)"
+            xr = f"({p('d_cor_rod')} / 2) * cos({ang_expr})"
+            yr = f"({p('d_cor_rod')} / 2) * sin({ang_expr})"
+            cortes.append(pz.cil(f"Corte_Rosca_0_{idx_r}", f"{p('d_rosca_0')} / 2", f"{p('p_rosca_0')} + 1 mm",
+                                 x=xr, y=yr, z=f"{bb.ZLength:.6f} mm - {p('p_rosca_0')}"))
     elif nombre == "Sufridera_Guia_05b_3D":
         cortes.append(pz.cil("Corte_Paso_Guia", f"{p('d_paso_guia')} / 2", "6 mm", z="-1 mm"))
+        cortes.append(pz.cil("Corte_Aloj_ORing", f"{p('d_aloj_oring')} / 2", f"{p('p_aloj_oring')} + 1 mm",
+                             z=f"{bb.ZLength:.6f} mm - {p('p_aloj_oring')}"))
     elif nombre == "Tapa_Interior_16b_3D":
         cortes.append(pz.cil("Corte_Bolsillo_Sufr_1", f"{p('d_aloj_sufr_guia')} / 2", p("p_sufr_guia"),
                              x=f"-1 * {p('x_guia')}", z=p("z_ini_sufr")))
@@ -127,8 +155,33 @@ def _adaptar_pieza_3d_impresa(pz, nombre, sh_norm, bb):
         cortes.append(pz.cil("Corte_Bolsillo_Nariz_Ext", f"{p('d_aloj_nariz_ext')} / 2", "12 mm",
                              z=p("z_fondo_ext")))
     elif nombre == "Sufridera_Eje_Ext_05a_3D":
+        rell = pz.cil("Relleno_Buje_Ext", "5.50 mm", f"{bb.ZLength:.4f} mm", z="0 mm")
+        base_rell = pz.fusion(f"{nombre}_BaseRellena", [base_step, rell])
+        base_step.Visibility = False
+        base_step = base_rell
         cortes.append(pz.cil("Corte_Paso_Punta_Husillo", f"{p('d_eje_punta')} / 2", "13 mm", z="-1 mm"))
         cortes.append(pz.cil("Corte_Paso_Escalon_Husillo", f"{p('d_eje_esc')} / 2", "4.85 mm", z="-1 mm"))
+    elif nombre == "Embolo_Delrin_10_3D":
+        # 1) Rellenar ranura angosta heredada del STEP (Z=5.75..8.87, Ø71.34..Ø75.72) sin invadir agujeros (R_max=33.60 < 35.40)
+        rell_ext = pz.cil("Relleno_Ranura_Ant_Ext", f"{p('d_ext_embolo')} / 2", "3.14 mm", z="5.74 mm")
+        rell_int = pz.cil("Relleno_Ranura_Ant_Int", "35.40 mm", "4.00 mm", z="5.30 mm")
+        anillo_rell = pz.corte("Anillo_Relleno_Ranura_Ant", rell_ext, rell_int)
+        base_rellena = pz.fusion("Base_Embolo_Ranura_Rellena", [base_step, anillo_rell])
+        base_step.Visibility = False
+        rell_ext.Visibility = False
+        rell_int.Visibility = False
+        anillo_rell.Visibility = False
+        # 2) Mecanizar ranura ensanchada para O-Ring comercial 68x4,00 NBR 70 (ancho 5.20 mm, fondo Ø69.60 mm)
+        corte_ext = pz.cil("Ranura_ORing_Ext", f"{p('d_ext_embolo')} / 2 + 2 mm", p("b_ranura_oring"), z=p("z_ini_oring"))
+        corte_int = pz.cil("Ranura_ORing_Int", f"{p('d_fondo_oring')} / 2", f"{p('b_ranura_oring')} + 2 mm",
+                           z=f"{p('z_ini_oring')} - 1 mm")
+        ranura = pz.corte("Ranura_ORing_68x4", corte_ext, corte_int)
+        sol = pz.corte(f"{nombre}_Solido", base_rellena, ranura)
+        base_rellena.Visibility = False
+        corte_ext.Visibility = False
+        corte_int.Visibility = False
+        ranura.Visibility = False
+        return sol, bb.ZLength
 
     if not cortes:
         base_step.Label = f"{nombre}_Solido"
@@ -158,9 +211,19 @@ ADAPTACIONES_DIMS = {
     "Adaptador_Eje_04_3D": [
         ("x_guia", "Semidistancia entre barras guía", "28.31 mm", "N", None, "plano"),
         ("d_despeje_sufr", "Diámetro despeje brida sufridera guía", "15.20 mm", "H", None, "calculado"),
+        ("d_cor_base", "PCD fijación a Tapa Interior 16b (45°)", "37.76 mm", "L", None, "plano"),
+        ("d_paso_45", "Diámetro paso tornillos M2 a 45°", "2.00 mm", "H", None, "calculado"),
+        ("d_caj_45", "Diámetro cajeado cabeza Allen M2 a 45°", "3.70 mm", "H", None, "calculado"),
+        ("p_caj_45", "Profundidad cajeado cabeza M2 a 45°", "3.00 mm", "L", None, "calculado"),
+        ("d_cor_rod", "PCD fijación desde Adaptador Rodamiento 03 (22.5°)", "37.00 mm", "L", None, "plano"),
+        ("ang_rosca_0", "Desfase angular patrón M2 respecto de 0°/90°", "22.50 deg", "N", None, "usuario"),
+        ("d_rosca_0", "Diámetro piloto M2 a 22.5°+90°k", "1.85 mm", "L", None, "calculado"),
+        ("p_rosca_0", "Profundidad agujero piloto M2 a 22.5°+90°k", "6.50 mm", "L", None, "calculado"),
     ],
     "Sufridera_Guia_05b_3D": [
         ("d_paso_guia", "Diámetro paso barra guía Ø7.55 + holgura", "7.55 mm", "H", None, "usuario"),
+        ("d_aloj_oring", "Diámetro alojamiento O-Ring guía 6.0x1.5", "8.90 mm", "L", None, "calculado"),
+        ("p_aloj_oring", "Profundidad escalón alojamiento O-Ring en cara +Z", "1.15 mm", "L", None, "calculado"),
     ],
     "Tapa_Interior_16b_3D": [
         ("x_guia", "Semidistancia entre barras guía", "28.31 mm", "N", None, "plano"),
@@ -175,15 +238,24 @@ ADAPTACIONES_DIMS = {
         ("z_fondo_ext", "Cota fondo bolsillo punta husillo ext", "1.40 mm", "N", None, "calculado"),
     ],
     "Sufridera_Eje_Ext_05a_3D": [
-        ("d_eje_punta", "Diámetro paso punta husillo Ø9.06 + holgura", "9.06 mm", "H", None, "usuario"),
-        ("d_eje_esc", "Diámetro paso escalón husillo Ø9.82 + holgura", "9.82 mm", "H", None, "usuario"),
+        ("d_eje_punta", "Diámetro paso punta husillo Ø8.80 (Opción 2) + holgura", "8.80 mm", "H", None, "usuario"),
+        ("d_eje_esc", "Diámetro paso escalón husillo unificado Ø8.80 (Opción 2)", "8.80 mm", "H", None, "usuario"),
+    ],
+    "Embolo_Delrin_10_3D": [
+        ("d_ext_embolo", "Diámetro exterior émbolo", "75.72 mm", "L", None, "plano"),
+        ("d_fondo_oring", "Diámetro fondo ranura p/ O-Ring 68x4,00 NBR 70", "69.60 mm", "L", None, "calculado"),
+        ("b_ranura_oring", "Ancho ranura dinámica ISO 3601 p/ cordón 4,00", "5.20 mm", "L", None, "norma"),
+        ("z_ini_oring", "Cota axial inicio ranura O-Ring desde Z=0", "4.95 mm", "L", None, "calculado"),
     ],
 }
 
 
 def importar_steps():
     print("FreeCAD", ".".join(App.Version()[:3]))
+    solo_env = {s.strip() for s in os.environ.get("SOLO_PIEZAS", "").split(",") if s.strip()}
     for archivo_stp, nombre, mat, eje, desc in CATALOGO_STEPS_3D:
+        if solo_env and nombre not in solo_env:
+            continue
         ruta_stp = os.path.join(DIR_ENTRADAS, archivo_stp)
         ruta_fcstd = os.path.join(AQUI, f"{nombre}.FCStd")
         if not os.path.exists(ruta_stp):
@@ -227,63 +299,72 @@ def _guardar_comercial(pz, sol, categoria, nombre):
 
 
 def generar_comerciales_y_cilindro():
+    solo_env = {s.strip() for s in os.environ.get("SOLO_PIEZAS", "").split(",") if s.strip()}
+
     # 1. Cilindro Vidrio Sodocálcico 3D (Ø83 x Ø76 x 188.75 mm) adaptado a Tapa_Exterior/Interior
-    pz = Pieza("Cilindro_09_3D")
-    pz.parametros([
-        ("d_ext",   "Diámetro exterior camisa vidrio (escala)", "83.00 mm",  "L", None, "calculado"),
-        ("d_int",   "Diámetro interior camisa vidrio (escala)", "76.00 mm",  "L", None, "calculado"),
-        ("l_total", "Longitud de la camisa (250 mm * 0.755)",     "188.75 mm", "L", None, "plano"),
-    ], modo=1, escala="1.0", holgura_fdm="0.20 mm")
-    pz.materiales("Vidrio_Sodocalcico")
-    p = pz.p
-    ext = pz.cil("Cil_Ext", f"{p('d_ext')} / 2", p("l_total"))
-    inte = pz.cil("Cil_Int", f"{p('d_int')} / 2", f"{p('l_total')} + 2 mm", z="-1 mm")
-    sol = pz.corte("Cilindro_09_3D_Solido", ext, inte)
-    pz.lcs("LCS_Origen")
-    pz.lcs("LCS_Extremo_Sup", z=p("l_total"))
-    pz.reporte_fisico(sol)
-    pz.cerrar(sol, os.path.join(AQUI, "Cilindro_09_3D.FCStd"))
+    if not solo_env or "Cilindro_09_3D" in solo_env:
+        pz = Pieza("Cilindro_09_3D")
+        pz.parametros([
+            ("d_ext",   "Diámetro exterior camisa vidrio (escala)", "83.00 mm",  "L", None, "calculado"),
+            ("d_int",   "Diámetro interior camisa vidrio (escala)", "76.00 mm",  "L", None, "calculado"),
+            ("l_total", "Longitud de la camisa (250 mm * 0.755)",     "188.75 mm", "L", None, "plano"),
+        ], modo=1, escala="1.0", holgura_fdm="0.20 mm")
+        pz.materiales("Vidrio_Sodocalcico")
+        p = pz.p
+        ext = pz.cil("Cil_Ext", f"{p('d_ext')} / 2", p("l_total"))
+        inte = pz.cil("Cil_Int", f"{p('d_int')} / 2", f"{p('l_total')} + 2 mm", z="-1 mm")
+        sol = pz.corte("Cilindro_09_3D_Solido", ext, inte)
+        pz.lcs("LCS_Origen")
+        pz.lcs("LCS_Extremo_Sup", z=p("l_total"))
+        pz.reporte_fisico(sol)
+        pz.cerrar(sol, os.path.join(AQUI, "Cilindro_09_3D.FCStd"))
 
     # 2. Rodamiento SKF 609-2Z (Ø9 x Ø24 x 7 mm)
-    pz = Pieza("Rodamiento_SKF_609")
-    pz.parametros([
-        ("d_int", "Diámetro interior d (SKF 609-2Z)", "9.00 mm",  "L", None, "norma"),
-        ("d_ext", "Diámetro exterior D (SKF 609-2Z)", "24.00 mm", "L", None, "norma"),
-        ("ancho", "Ancho B (SKF 609-2Z)",             "7.00 mm",  "L", None, "norma"),
-    ], modo=3)
-    pz.materiales("Acero_1045")
-    p = pz.p
-    c1 = pz.cil("Aro_Ext", f"{p('d_ext')} / 2", p("ancho"))
-    c2 = pz.cil("Eje_Int", f"{p('d_int')} / 2", f"{p('ancho')} + 2 mm", z="-1 mm")
-    sol = pz.corte("Rodamiento_SKF_609_Solido", c1, c2)
-    pz.lcs("LCS_Origen")
-    pz.lcs("LCS_Cara_Sup", z=p("ancho"))
-    pz.reporte_fisico(sol)
-    _guardar_comercial(pz, sol, "Rodamientos", "Rodamiento_SKF_609")
+    if not solo_env or "Rodamiento_SKF_609" in solo_env:
+        pz = Pieza("Rodamiento_SKF_609")
+        pz.parametros([
+            ("d_int", "Diámetro interior d (SKF 609-2Z)", "9.00 mm",  "L", None, "norma"),
+            ("d_ext", "Diámetro exterior D (SKF 609-2Z)", "24.00 mm", "L", None, "norma"),
+            ("ancho", "Ancho B (SKF 609-2Z)",             "7.00 mm",  "L", None, "norma"),
+        ], modo=3)
+        pz.materiales("Acero_1045")
+        p = pz.p
+        c1 = pz.cil("Aro_Ext", f"{p('d_ext')} / 2", p("ancho"))
+        c2 = pz.cil("Eje_Int", f"{p('d_int')} / 2", f"{p('ancho')} + 2 mm", z="-1 mm")
+        sol = pz.corte("Rodamiento_SKF_609_Solido", c1, c2)
+        pz.lcs("LCS_Origen")
+        pz.lcs("LCS_Cara_Sup", z=p("ancho"))
+        pz.reporte_fisico(sol)
+        _guardar_comercial(pz, sol, "Rodamientos", "Rodamiento_SKF_609")
 
     # 3. Retén DIN 3760 A 10x22x7 mm
-    pz = Pieza("Reten_10x22x7")
-    pz.parametros([
-        ("d_int", "Diámetro de eje (DIN 3760A)",      "10.00 mm", "L", None, "norma"),
-        ("d_ext", "Diámetro alojamiento (DIN 3760A)", "22.00 mm", "L", None, "norma"),
-        ("ancho", "Espesor axial",                    "7.00 mm",  "L", None, "norma"),
-    ], modo=3)
-    pz.materiales("Caucho_NBR")
-    p = pz.p
-    c1 = pz.cil("Reten_Ext", f"{p('d_ext')} / 2", p("ancho"))
-    c2 = pz.cil("Reten_Int", f"{p('d_int')} / 2", f"{p('ancho')} + 2 mm", z="-1 mm")
-    sol = pz.corte("Reten_10x22x7_Solido", c1, c2)
-    pz.lcs("LCS_Origen")
-    pz.lcs("LCS_Cara_Sup", z=p("ancho"))
-    pz.reporte_fisico(sol)
-    _guardar_comercial(pz, sol, "Retenes_DIN_3760", "Reten_10x22x7")
+    if not solo_env or "Reten_10x22x7" in solo_env:
+        pz = Pieza("Reten_10x22x7")
+        pz.parametros([
+            ("d_int", "Diámetro de eje (DIN 3760A)",      "10.00 mm", "L", None, "norma"),
+            ("d_ext", "Diámetro alojamiento (DIN 3760A)", "22.00 mm", "L", None, "norma"),
+            ("ancho", "Espesor axial",                    "7.00 mm",  "L", None, "norma"),
+        ], modo=3)
+        pz.materiales("Caucho_NBR")
+        p = pz.p
+        c1 = pz.cil("Reten_Ext", f"{p('d_ext')} / 2", p("ancho"))
+        c2 = pz.cil("Reten_Int", f"{p('d_int')} / 2", f"{p('ancho')} + 2 mm", z="-1 mm")
+        sol = pz.corte("Reten_10x22x7_Solido", c1, c2)
+        pz.lcs("LCS_Origen")
+        pz.lcs("LCS_Cara_Sup", z=p("ancho"))
+        pz.reporte_fisico(sol)
+        _guardar_comercial(pz, sol, "Retenes_DIN_3760", "Reten_10x22x7")
 
-    # 4. O-Rings DIN 3771 (75x3.55, 69x3.55, 11.2x1.8)
+    # 4. O-Rings DIN 3771 / ISO 3601 (75x3.55, 69x3.55, 68x4.00, 11.2x1.8, 6.0x1.5)
     for nom, d_i, s_c in [
         ("ORing_75x3_55",   75.0, 3.55),
         ("ORing_69x3_55",   69.0, 3.55),
+        ("ORing_68x4_00",   68.0, 4.00),
         ("ORing_11_2x1_8",  11.2, 1.80),
+        ("ORing_6_0x1_5",    6.0, 1.50),
     ]:
+        if solo_env and nom not in solo_env:
+            continue
         pz = Pieza(nom)
         pz.parametros([
             ("d_int", "Diámetro interior DIN 3771", f"{d_i:.2f} mm", "L", None, "norma"),
@@ -299,6 +380,8 @@ def generar_comerciales_y_cilindro():
 
     # 5. Pasadores elásticos ISO 8752 (3x14 y 3x10)
     for nom, l_p in [("Pasador_3x14", 14.0), ("Pasador_3x10", 10.0)]:
+        if solo_env and nom not in solo_env:
+            continue
         pz = Pieza(nom)
         pz.parametros([
             ("d_ext", "Diámetro nominal ISO 8752", "3.00 mm",      "L", None, "norma"),
