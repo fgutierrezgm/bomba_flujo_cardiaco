@@ -1,9 +1,22 @@
 # Respaldos automáticos de FreeCAD (el historial lo lleva git)
 *.FCBak
 *.FCStd1
+# Entregables de Release (publicar como assets en GitHub Releases, no en git)
+proyectos/*/planos/*.pdf
+proyectos/*/planos/**/*.pdf
+proyectos/*/ensamblajes/*.pdf
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+# STLs sueltos/temporales fuera de la carpeta stl/ oficial
+proyectos/*/piezas/*.stl
 # Python
 __pycache__/
 *.pyc
 # Temporales
 *.tmp
 .~lock*
+*.swp
+.DS_Store

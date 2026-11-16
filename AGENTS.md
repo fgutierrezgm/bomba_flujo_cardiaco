@@ -91,8 +91,23 @@ y las 2 o 3 propuestas de mejora más valiosas.
    - Si el usuario agregó operaciones/objetos manuales en el árbol del `.FCStd` o editó `Placement`/expresiones fuera de la hoja, el script aborta con `[GUARDIA ANTI-PISADO]` sin sobrescribir el `.FCStd`. Solo se permite forzar la sobrescritura con `FORZAR=1` tras incorporarlo al script o con confirmación del usuario.
 
    
-## 4. MODO HÍBRIDO EN VIVO (MCP BRIDGE)
+## 4. MODO HÍBRIDO Y DISEÑO RÁPIDO EN VIVO (MCP BRIDGE)
 Si el servidor MCP `freecad` está activo (`MCP On`):
-1. **Sincronización Código <-> Sesión Viva:** Todo cambio geométrico que te pida el usuario debes plasmarlo en el script `generar_<pieza>.py` y ejecutarlo en la sesión abierta usando la herramienta MCP `execute_python_file` (así el archivo `.py` y lo que el usuario ve en pantalla nunca se desfasan).
-2. **Lectura de la selección del mouse del usuario:** Si el usuario dice "en esta cara", "en esta arista" o "en la pieza seleccionada", usa `execute_python` para inspeccionar `FreeCADGui.Selection.getSelectionEx()`, extrae las coordenadas/subelementos (`SubElementNames`, `PickedPoints`, `BoundBox`), tradúcelos a parámetros o conectores `LCS_` en la hoja `Parametros`, y actualiza el script.
-3. **Inspección y validación en vivo:** Puedes ejecutar `_herramientas/validar_fcstd.py` o consultar el estado del documento directamente con `execute_python` sin necesidad de levantar un proceso externo `freecadcmd`.
+1. **Lectura instantánea de la selección del mouse (`inspeccionar_seleccion`):**
+   Si el usuario dice "en esta cara", "en esta arista" o "en la pieza seleccionada", ejecuta con `execute_python`:
+   `from fc_helpers import inspeccionar_seleccion; inspeccionar_seleccion()`
+   Esto resuelve selecciones directas o a través de `App::Link` en ensamblajes y reporta en una sola llamada coordenadas locales de pieza y globales de ensamblaje, tipo geométrico, diámetro/radio, centro, eje y `BoundBox`.
+2. **Durante Sesión de Diseño Rápido / Pruebas de Concepto (Prioridad = Velocidad):**
+   - **Pequeñas modificaciones a piezas existentes:** opera directamente en memoria vía MCP `execute_python` usando `EdicionViva` (`_herramientas/fc_helpers.py`) sin destruir ni reconstruir todo el árbol CSG:
+     - Editar o crear cotas en `Parametros`: `ev.set_param(alias, valor, ...)` + `ev.aplicar()`.
+     - Agregar, modificar o eliminar operaciones puntuales en el árbol: `ev.cil(...)`, `ev.cono(...)`, `ev.caja(...)`, `ev.lcs(...)`, `ev.cortar(...)`, `ev.fusionar(...)`, `ev.eliminar(...)` + `ev.aplicar()`.
+   - **Piezas nuevas desde cero:** diséñalas mediante su script `generar_<pieza>.py` (clase `Pieza`) y ejecútalo en la sesión abierta con `execute_python_file`.
+   - **Ajustes rápidos en ensamblaje:** modifica vínculos o juntas puntuales en memoria (`mover_en_ensamblaje(...)`) y usa `verificar_colision_rapida(...)` (`<0.1 s` filtrado por `BoundBox`) en lugar del verificador global.
+   - **Preservación de vista y cero tareas pesadas en vivo:** durante la iteración rápida NUNCA fuerces `viewIsometric()`/`ViewFit` sobre documentos ya abiertos, no cambies la pestaña activa del usuario, y pospón validadores completos, regeneración de planos TechDraw y videos hasta el cierre de la sesión.
+3. **Al Finalizar la Sesión de Diseño Rápido (Consolidación y Verificación Completa):**
+   Cuando el usuario indique que terminó las ediciones en vivo:
+   - Audita todos los cambios en memoria con `listar_cambios_vivos()`.
+   - Vuelca todas las operaciones y parámetros modificados a sus scripts `generar_<pieza>.py` y `generar_ensamblaje_*.py`, regenerando y guardando los `.FCStd` con su `Manifiesto_Script` actualizado.
+   - Actualiza todas las hojas de cálculo (`Parametros`, `Materiales`, `Reporte_Fisico`, `Lista_de_Materiales` y `Materiales_Generales`).
+   - Ejecuta `validar_fcstd.py` (`VALIDACION: OK`) y `verificar_interfaces.py` (`VERIFICACION_INTERFACES: OK`).
+   - Actualiza fichas de diseño, planos (`generar_planos_*.py`) y/o video (`generar_video_*.py`) según corresponda.

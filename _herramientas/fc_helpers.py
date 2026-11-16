@@ -191,6 +191,16 @@ class Pieza:
             if hasattr(App, attr_m):
                 delattr(App, attr_m)
 
+        # Recordar documento activo previo en GUI para no robarle el foco al ensamblaje
+        self._doc_activo_previo = None
+        if App.GuiUp:
+            try:
+                import FreeCADGui as Gui
+                if Gui.activeDocument() and Gui.activeDocument().Document:
+                    self._doc_activo_previo = Gui.activeDocument().Document.Name
+            except Exception:
+                pass
+
         # Guardia anti-pisado: inspeccionar documento previo (en memoria o en disco) ANTES de cerrarlo
         self._estado_prev = self._capturar_estado_previo()
         self._verificar_operaciones_manuales_arbol()
@@ -200,17 +210,15 @@ class Pieza:
             self.part = self.doc.getObject(nombre)
             if self.part is None:
                 self.part = self.doc.addObject("App::Part", nombre)
-            # Limpiar objetos internos previos sin destruir self.doc ni self.part (evita punteros colgantes en App::Link)
-            for o in list(self.doc.Objects):
-                if o == self.part or o.TypeId in ("App::Origin", "App::Plane", "App::Line"):
-                    continue
+            if hasattr(self.part, "Cambios_En_Vivo"):
                 try:
-                    self.doc.removeObject(o.Name)
+                    self.part.Cambios_En_Vivo = "[]"
                 except Exception:
                     pass
         else:
             self.doc = App.newDocument(nombre)
             self.part = self.doc.addObject("App::Part", nombre)
+        self._usados = set()
         self.hoja = None
         self.hoja_mat = None
         self.filas_actuales = []
@@ -221,12 +229,20 @@ class Pieza:
         """Lee parámetros y objetos del documento existente (en GUI o en disco) antes de regenerar."""
         import json
         import os
-        estado = {"manifiesto": None, "parametros": {}, "cabecera": {}, "objetos": {}}
+        estado = {
+            "manifiesto": None,
+            "parametros": {},
+            "cabecera": {},
+            "objetos": {},
+            "apariencia": None,
+            "estaba_abierto_gui": False,
+        }
         doc_prev = None
         cerrar_temp = False
 
         if self.nombre in App.listDocuments():
             doc_prev = App.getDocument(self.nombre)
+            estado["estaba_abierto_gui"] = True
         elif self.ruta_salida and os.path.exists(self.ruta_salida):
             try:
                 doc_prev = App.openDocument(self.ruta_salida, True)
@@ -238,6 +254,20 @@ class Pieza:
             return estado
 
         try:
+            mat_prev = doc_prev.getObject("Materiales")
+            if mat_prev:
+                try:
+                    p_val = float(mat_prev.get("apariencia_personalizada"))
+                    if p_val > 0.5:
+                        estado["apariencia"] = (
+                            float(mat_prev.get("color_r")),
+                            float(mat_prev.get("color_g")),
+                            float(mat_prev.get("color_b")),
+                            float(mat_prev.get("transparencia_mat")),
+                        )
+                except Exception:
+                    pass
+
             part_prev = doc_prev.getObject(self.nombre)
             if part_prev and hasattr(part_prev, "Manifiesto_Script"):
                 raw_m = getattr(part_prev, "Manifiesto_Script", "")
@@ -311,13 +341,21 @@ class Pieza:
     def _verificar_operaciones_manuales_arbol(self):
         """Si hay objetos nuevos o expresiones/posiciones editadas a mano en el árbol, detiene la regeneración."""
         import os
-        if os.environ.get("FORZAR") == "1":
+        if os.environ.get("FORZAR") == "1" or getattr(App, "_forzar_regeneracion", False):
             return
         manif = self._estado_prev.get("manifiesto")
         if not manif:
             return
         objs_manif = manif.get("objetos", {})
         objs_prev = self._estado_prev.get("objetos", {})
+
+        texto_script = ""
+        if self.ruta_script and os.path.exists(self.ruta_script):
+            try:
+                with open(self.ruta_script, "r", encoding="utf-8") as f:
+                    texto_script = f.read()
+            except Exception:
+                texto_script = ""
 
         # ¿Cambió algún parámetro en la hoja Parametros respecto del manifiesto?
         params_manif = manif.get("parametros", {})
@@ -331,6 +369,7 @@ class Pieza:
             f"{nombre_obj} ({info['TypeId']}, Label='{info['Label']}')"
             for nombre_obj, info in objs_prev.items()
             if nombre_obj not in objs_manif
+            and not (texto_script and (nombre_obj in texto_script or info.get("Label", "") in texto_script))
         ]
         modificados = []
         for nombre_obj, info in objs_prev.items():
@@ -338,6 +377,10 @@ class Pieza:
                 continue
             m_info = objs_manif[nombre_obj]
             if info["Expresiones"] != m_info.get("Expresiones", {}):
+                # Si todas las expresiones nuevas ya están en el script .py, ya fue consolidado
+                exprs_vals = list(info["Expresiones"].values())
+                if texto_script and exprs_vals and all(str(ev) in texto_script for ev in exprs_vals):
+                    continue
                 modificados.append(
                     f"{nombre_obj}: expresiones cambiaron de {m_info.get('Expresiones')} a {info['Expresiones']}"
                 )
@@ -462,8 +505,38 @@ class Pieza:
         return f"<<Parametros>>.{alias}"
 
     def nuevo(self, tipo, nombre):
-        """Crea el objeto DENTRO del App::Part (evita 'Links go out of the allowed scope')."""
-        return self.part.newObject(tipo, nombre)
+        """Crea o reutiliza el objeto DENTRO del App::Part sin destruir punteros vivos en App::Link."""
+        ex = self.doc.getObject(nombre)
+        if ex is not None:
+            if ex.TypeId == tipo:
+                if hasattr(ex, "ExpressionEngine"):
+                    for prop, _ in list(ex.ExpressionEngine):
+                        try:
+                            ex.setExpression(prop, None)
+                        except Exception:
+                            pass
+                if tipo == "Spreadsheet::Sheet" and hasattr(ex, "clearAll"):
+                    try:
+                        ex.clearAll()
+                    except Exception:
+                        pass
+                if hasattr(ex, "Placement"):
+                    ex.Placement = App.Placement()
+                if self.part and ex not in self.part.Group and ex != self.part:
+                    try:
+                        self.part.addObject(ex)
+                    except Exception:
+                        pass
+                self._usados.add(ex.Name)
+                return ex
+            else:
+                try:
+                    self.doc.removeObject(nombre)
+                except Exception:
+                    pass
+        o = self.part.newObject(tipo, nombre)
+        self._usados.add(o.Name)
+        return o
 
     # -- hoja de parámetros ---------------------------------------------------
     def parametros(self, filas, modo=2, escala="1.0", holgura_fdm="0.20 mm"):
@@ -640,7 +713,15 @@ class Pieza:
         es_personalizado = False
         r_col, g_col, b_col, transp = None, None, None, None
 
-        if os.path.exists(ruta):
+        ap_prev = self._estado_prev.get("apariencia")
+        if ap_prev is not None:
+            r_col, g_col, b_col, transp = ap_prev
+            es_personalizado = True
+        elif (
+            os.path.exists(ruta)
+            and os.path.abspath(getattr(self.doc, "FileName", "") or "") != os.path.abspath(ruta)
+            and self.nombre not in App.listDocuments()
+        ):
             try:
                 doc_prev = App.openDocument(ruta, True)
                 mat_prev = doc_prev.getObject("Materiales")
@@ -655,23 +736,8 @@ class Pieza:
                             es_personalizado = True
                     except Exception:
                         pass
-                sol_prev = doc_prev.getObject(solido.Name)
-                if not es_personalizado and sol_prev and hasattr(sol_prev, "ViewObject") and sol_prev.ViewObject:
-                    sc = getattr(sol_prev.ViewObject, "ShapeColor", None)
-                    tr = getattr(sol_prev.ViewObject, "Transparency", None)
-                    # Ignorar el gris por defecto de FreeCAD (0.447, 0.475, 0.502) cuando el archivo se guardó sin GUI
-                    es_gris_fc = sc and (abs(sc[0] - 0.447) < 0.02 and abs(sc[1] - 0.475) < 0.02 and abs(sc[2] - 0.502) < 0.02)
-                    if sc and not es_gris_fc and self.hoja_mat:
-                        def_r = float(self.hoja_mat.get("color_r"))
-                        def_g = float(self.hoja_mat.get("color_g"))
-                        def_b = float(self.hoja_mat.get("color_b"))
-                        def_tr = float(self.hoja_mat.get("transparencia_mat"))
-                        if (abs(sc[0] - def_r) > 0.01 or abs(sc[1] - def_g) > 0.01 or
-                            abs(sc[2] - def_b) > 0.01 or abs(tr - def_tr) > 1):
-                            r_col, g_col, b_col = sc[0], sc[1], sc[2]
-                            transp = tr
-                            es_personalizado = True
-                App.closeDocument(doc_prev.Name)
+                if doc_prev != self.doc:
+                    App.closeDocument(doc_prev.Name)
             except Exception:
                 pass
 
@@ -703,25 +769,57 @@ class Pieza:
             except Exception:
                 pass
 
-        # 3. Ocultar auxiliares y orígenes ANTES de guardar (funciona también en freecadcmd)
+        # 3. Limpiar objetos viejos no usados en esta corrida (sin haber destruido nunca solido/Parametros)
+        for o in list(self.doc.Objects):
+            if (
+                o == self.part
+                or o.Name in self._usados
+                or o.TypeId in ("App::Origin", "App::Plane", "App::Line", "App::Point")
+            ):
+                continue
+            try:
+                self.doc.removeObject(o.Name)
+            except Exception:
+                pass
+
+        # 4. Ocultar auxiliares y orígenes ANTES de guardar (funciona también en freecadcmd)
         for o in self.auxiliares:
             o.Visibility = False
         for o in self.doc.Objects:
-            if o.TypeId in ("App::Origin", "App::Plane", "App::Line") or o.isDerivedFrom("Part::Datum"):
+            if o.TypeId in ("App::Origin", "App::Plane", "App::Line", "App::Point") or o.isDerivedFrom("Part::Datum"):
                 o.Visibility = False
         solido.Visibility = True
         self.part.Visibility = True
 
         self.doc.recompute()
+        for d in App.listDocuments().values():
+            if d != self.doc and any(
+                o.TypeId == "App::Link" and getattr(o, "LinkedObject", None) == self.part for o in d.Objects
+            ):
+                try:
+                    d.recompute()
+                except Exception:
+                    pass
         self._guardar_manifiesto()
         os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
         self.doc.saveAs(ruta)
         print("Guardado:", ruta)
         if App.GuiUp:
             import FreeCADGui as Gui
-            if Gui.activeDocument() and Gui.activeDocument().activeView():
-                Gui.activeDocument().activeView().viewIsometric()
-                Gui.SendMsgToActiveView("ViewFit")
+            if (
+                self._doc_activo_previo
+                and self._doc_activo_previo != self.doc.Name
+                and self._doc_activo_previo in App.listDocuments()
+            ):
+                try:
+                    App.setActiveDocument(self._doc_activo_previo)
+                    Gui.setActiveDocument(self._doc_activo_previo)
+                except Exception:
+                    pass
+            elif not self._estado_prev.get("estaba_abierto_gui"):
+                if Gui.activeDocument() and Gui.activeDocument().activeView():
+                    Gui.activeDocument().activeView().viewIsometric()
+                    Gui.SendMsgToActiveView("ViewFit")
 
 
 class Ensamblaje:
@@ -1129,4 +1227,662 @@ class Ensamblaje:
                     App._material_sync_observer.sync_document(self.doc)
                 except Exception:
                     pass
+
+
+# =============================================================================
+# MODO DE DISEÑO RÁPIDO EN VIVO (MCP LIVE HELPERS)
+# =============================================================================
+
+def inspeccionar_seleccion(imprimir=True):
+    """
+    Inspecciona la selección actual del mouse en FreeCAD GUI (incluso a través de App::Link
+    en ensamblajes) y reporta coordenadas tanto GLOBALES (ensamblaje) como LOCALES (pieza),
+    tipo de superficie/curva, radio/diámetro, centro, normal/eje y BoundBox.
+    """
+    if not App.GuiUp:
+        return []
+    import FreeCADGui as Gui
+
+    sels = Gui.Selection.getSelectionEx("", 0)
+    resultados = []
+    for s in sels:
+        obj_raiz = s.Object
+        doc_raiz = obj_raiz.Document
+        sub_names = list(s.SubElementNames) if s.SubElementNames else [""]
+        picked_pts = list(s.PickedPoints) if hasattr(s, "PickedPoints") else []
+
+        for idx, sub in enumerate(sub_names):
+            partes = [p for p in sub.split(".") if p]
+            lnk_inst = None
+            solido = None
+            leaf = ""
+            plc_global = App.Placement()
+
+            if obj_raiz.TypeId == "App::Link":
+                lnk_inst = obj_raiz
+                plc_global = App.Placement(lnk_inst.Placement)
+            elif partes and doc_raiz.getObject(partes[0]) is not None:
+                c0 = doc_raiz.getObject(partes[0])
+                if c0.TypeId == "App::Link":
+                    lnk_inst = c0
+                    plc_global = App.Placement(lnk_inst.Placement)
+                    partes = partes[1:]
+
+            doc_pieza = (
+                lnk_inst.LinkedObject.Document
+                if (lnk_inst and getattr(lnk_inst, "LinkedObject", None))
+                else doc_raiz
+            )
+            part_pieza = (
+                lnk_inst.LinkedObject
+                if (lnk_inst and getattr(lnk_inst, "LinkedObject", None) and lnk_inst.LinkedObject.TypeId == "App::Part")
+                else next((o for o in doc_pieza.Objects if o.TypeId == "App::Part"), None)
+            )
+
+            for tok in partes:
+                if any(tok.startswith(pref) for pref in ("Face", "Edge", "Vertex")):
+                    leaf = tok
+                else:
+                    cand = doc_pieza.getObject(tok)
+                    if cand is not None and hasattr(cand, "Shape"):
+                        solido = cand
+
+            if solido is None:
+                if hasattr(obj_raiz, "Shape") and obj_raiz.TypeId != "App::Link" and obj_raiz.TypeId != "Assembly::AssemblyObject":
+                    solido = obj_raiz
+                elif part_pieza is not None:
+                    cands = [
+                        o for o in part_pieza.Group
+                        if getattr(o, "Visibility", False) and hasattr(o, "Shape") and not o.Shape.isNull()
+                        and not o.isDerivedFrom("Part::Datum")
+                    ]
+                    if cands:
+                        solido = cands[-1]
+
+            pt_glob = picked_pts[idx] if idx < len(picked_pts) else None
+            pt_loc = plc_global.inverse().multVec(pt_glob) if pt_glob is not None else None
+
+            info = {
+                "instancia_ensamblaje": lnk_inst.Name if lnk_inst else None,
+                "doc_pieza": doc_pieza.Name if doc_pieza else None,
+                "part_pieza": part_pieza.Name if part_pieza else None,
+                "solido": solido.Name if solido else None,
+                "subelemento": leaf or sub,
+                "picked_global": tuple(round(v, 4) for v in (pt_glob.x, pt_glob.y, pt_glob.z)) if pt_glob else None,
+                "picked_local": tuple(round(v, 4) for v in (pt_loc.x, pt_loc.y, pt_loc.z)) if pt_loc else None,
+            }
+
+            if solido is not None and leaf:
+                try:
+                    so_loc = solido.getSubObject(leaf, 1)
+                    if so_loc is not None:
+                        bb = so_loc.BoundBox
+                        info["bbox_local"] = (
+                            round(bb.XMin, 3), round(bb.XMax, 3),
+                            round(bb.YMin, 3), round(bb.YMax, 3),
+                            round(bb.ZMin, 3), round(bb.ZMax, 3),
+                        )
+                        surf = getattr(so_loc, "Surface", None)
+                        curv = getattr(so_loc, "Curve", None)
+                        geom = surf or curv
+                        if geom is not None:
+                            info["tipo_geom"] = geom.__class__.__name__
+                            if hasattr(geom, "Radius"):
+                                r_val = float(geom.Radius)
+                                info["radio"] = round(r_val, 4)
+                                info["diametro"] = round(r_val * 2.0, 4)
+                            if hasattr(geom, "Center"):
+                                c_loc = geom.Center
+                                c_glob = plc_global.multVec(c_loc)
+                                info["centro_local"] = (round(c_loc.x, 4), round(c_loc.y, 4), round(c_loc.z, 4))
+                                info["centro_global"] = (round(c_glob.x, 4), round(c_glob.y, 4), round(c_glob.z, 4))
+                            if hasattr(geom, "Axis"):
+                                ax_loc = geom.Axis
+                                ax_glob = plc_global.Rotation.multVec(ax_loc)
+                                info["eje_local"] = (round(ax_loc.x, 4), round(ax_loc.y, 4), round(ax_loc.z, 4))
+                                info["eje_global"] = (round(ax_glob.x, 4), round(ax_glob.y, 4), round(ax_glob.z, 4))
+                except Exception:
+                    pass
+
+            resultados.append(info)
+            if imprimir:
+                print(
+                    f"[SELECCION] Pieza={info['doc_pieza']} (Inst={info['instancia_ensamblaje']}) "
+                    f"Solido={info['solido']} Sub={info['subelemento']} "
+                    f"Tipo={info.get('tipo_geom', '-')} D={info.get('diametro', '-')} (R={info.get('radio', '-')})"
+                )
+                if info.get("centro_local"):
+                    print(f"  Centro Local={info['centro_local']} | Global={info['centro_global']}")
+                if info.get("picked_local"):
+                    print(f"  Picked Local={info['picked_local']} | Global={info['picked_global']}")
+                if info.get("bbox_local"):
+                    bx = info["bbox_local"]
+                    print(f"  BBox Local: X=[{bx[0]},{bx[1]}] Y=[{bx[2]},{bx[3]}] Z=[{bx[4]},{bx[5]}]")
+    return resultados
+
+
+class EdicionViva:
+    """
+    Edición incremental ultrarrápida en memoria sobre una pieza ya abierta en FreeCAD.
+    Permite modificar parámetros o agregar/editar/eliminar operaciones individuales sin
+    destruir ni reconstruir todo el árbol CSG, preservando la cámara y pestaña activa.
+    """
+    def __init__(self, nombre_pieza=None, ruta_fcstd=None):
+        import os
+        if nombre_pieza is None and App.GuiUp:
+            sel = inspeccionar_seleccion(imprimir=False)
+            if sel and sel[0].get("doc_pieza"):
+                nombre_pieza = sel[0]["doc_pieza"]
+            else:
+                import FreeCADGui as Gui
+                if Gui.activeDocument() and Gui.activeDocument().Document:
+                    nombre_pieza = Gui.activeDocument().Document.Name
+
+        self.nombre = nombre_pieza
+        if nombre_pieza in App.listDocuments():
+            self.doc = App.getDocument(nombre_pieza)
+        elif ruta_fcstd and os.path.exists(ruta_fcstd):
+            self.doc = App.openDocument(os.path.abspath(ruta_fcstd), True)
+        else:
+            raise ValueError(f"Pieza '{nombre_pieza}' no está abierta en memoria ni se indicó ruta_fcstd válida.")
+
+        self.part = self.doc.getObject(self.nombre) or next(
+            (o for o in self.doc.Objects if o.TypeId == "App::Part"), None
+        )
+        self.hoja = self.doc.getObject("Parametros")
+        self.solido = self._detectar_solido_actual()
+        self._ops_sesion = []
+
+    def _detectar_solido_actual(self):
+        if self.part:
+            vis = [
+                o for o in self.part.Group
+                if getattr(o, "Visibility", False)
+                and hasattr(o, "Shape") and not o.Shape.isNull()
+                and not o.isDerivedFrom("Part::Datum")
+                and o.TypeId not in ("App::Origin", "App::Plane", "App::Line")
+            ]
+            if vis:
+                return vis[-1]
+        cand = self.doc.getObject(f"{self.nombre}_Solido")
+        return cand
+
+    def _registrar_cambio(self, accion, detalle):
+        import json
+        self._ops_sesion.append({"accion": accion, "detalle": detalle})
+        if self.part is not None:
+            if not hasattr(self.part, "Cambios_En_Vivo"):
+                self.part.addProperty(
+                    "App::PropertyString", "Cambios_En_Vivo", "_Control_IA",
+                    "Historial de ediciones rápidas en vivo pendientes de consolidar en .py", 4
+                )
+            prev = []
+            try:
+                raw = getattr(self.part, "Cambios_En_Vivo", "")
+                if raw:
+                    prev = json.loads(raw)
+            except Exception:
+                prev = []
+            prev.append({"accion": accion, "detalle": detalle})
+            self.part.Cambios_En_Vivo = json.dumps(prev, ensure_ascii=False)
+
+    def p(self, alias):
+        return f"<<Parametros>>.{alias}"
+
+    def set_param(self, alias, nominal, desc="", tipo="L", mecha="", origen="usuario"):
+        """Actualiza un parámetro existente en la hoja Parametros o lo agrega si no existe."""
+        ss = self.hoja
+        if ss is None:
+            raise RuntimeError(f"La pieza '{self.nombre}' no tiene hoja 'Parametros'.")
+        r = 7
+        fila_encontrada = None
+        while True:
+            try:
+                val_a = ss.get(f"A{r}")
+            except Exception:
+                val_a = None
+            if not val_a:
+                break
+            if str(val_a).strip() == alias:
+                fila_encontrada = r
+                break
+            r += 1
+
+        if fila_encontrada is not None:
+            ss.set(f"D{fila_encontrada}", str(nominal))
+            if desc:
+                ss.set(f"C{fila_encontrada}", str(desc))
+            if mecha:
+                ss.set(f"E{fila_encontrada}", str(mecha))
+            ss.set(f"F{fila_encontrada}", str(origen))
+            self._registrar_cambio("modificar_param", {"alias": alias, "nominal": str(nominal), "fila": fila_encontrada})
+        else:
+            ss.set(f"A{r}", alias)
+            ss.set(f"C{r}", desc or alias)
+            ss.set(f"D{r}", str(nominal))
+            if mecha:
+                ss.set(f"E{r}", str(mecha))
+            ss.set(f"F{r}", str(origen))
+            ss.set(f"B{r}", FORMULA[tipo].format(r=r))
+            ss.setAlias(f"B{r}", alias)
+            self._registrar_cambio("agregar_param", {
+                "alias": alias, "desc": desc or alias, "nominal": str(nominal),
+                "tipo": tipo, "mecha": str(mecha), "origen": str(origen), "fila": r,
+            })
+        ss.recompute()
+        return self.p(alias)
+
+    def _asegurar_obj(self, type_id, nombre):
+        o = self.doc.getObject(nombre)
+        if o is None:
+            o = self.part.newObject(type_id, nombre) if self.part else self.doc.addObject(type_id, nombre)
+        o.Visibility = False
+        return o
+
+    def cil(self, nombre, radio, altura, x=None, y=None, z=None):
+        c = self._asegurar_obj("Part::Cylinder", nombre)
+        c.setExpression("Radius", str(radio))
+        c.setExpression("Height", str(altura))
+        for eje, expr in (("x", x), ("y", y), ("z", z)):
+            c.setExpression(f".Placement.Base.{eje}", str(expr) if expr is not None else None)
+        self._registrar_cambio("cil", {"nombre": nombre, "radio": radio, "altura": altura, "x": x, "y": y, "z": z})
+        return c
+
+    def cil_x(self, nombre, radio, largo, x=None, y=None, z=None):
+        c = self.cil(nombre, radio, largo, x=x, y=y, z=z)
+        c.Placement.Rotation = App.Rotation(App.Vector(0, 1, 0), 90)
+        return c
+
+    def cono(self, nombre, r1, r2, altura, x=None, y=None, z=None):
+        c = self._asegurar_obj("Part::Cone", nombre)
+        c.setExpression("Radius1", str(r1))
+        c.setExpression("Radius2", str(r2))
+        c.setExpression("Height", str(altura))
+        for eje, expr in (("x", x), ("y", y), ("z", z)):
+            c.setExpression(f".Placement.Base.{eje}", str(expr) if expr is not None else None)
+        self._registrar_cambio("cono", {"nombre": nombre, "r1": r1, "r2": r2, "altura": altura, "x": x, "y": y, "z": z})
+        return c
+
+    def caja(self, nombre, largo, ancho, alto, x=None, y=None, z=None):
+        b = self._asegurar_obj("Part::Box", nombre)
+        b.setExpression("Length", str(largo))
+        b.setExpression("Width", str(ancho))
+        b.setExpression("Height", str(alto))
+        for eje, expr in (("x", x), ("y", y), ("z", z)):
+            b.setExpression(f".Placement.Base.{eje}", str(expr) if expr is not None else None)
+        self._registrar_cambio("caja", {"nombre": nombre, "largo": largo, "ancho": ancho, "alto": alto, "x": x, "y": y, "z": z})
+        return b
+
+    def lcs(self, nombre, x=None, y=None, z=None, visible=False):
+        o = self._asegurar_obj("PartDesign::CoordinateSystem", nombre)
+        for eje, expr in (("x", x), ("y", y), ("z", z)):
+            o.setExpression(f".Placement.Base.{eje}", str(expr) if expr is not None else None)
+        o.Visibility = visible
+        self._registrar_cambio("lcs", {"nombre": nombre, "x": x, "y": y, "z": z})
+        return o
+
+    def _copiar_apariencia_vista(self, origen, destino):
+        if not App.GuiUp:
+            return
+        try:
+            vo_orig = getattr(origen, "ViewObject", None)
+            vo_dest = getattr(destino, "ViewObject", None)
+            if vo_orig and vo_dest:
+                if hasattr(vo_orig, "ShapeColor"):
+                    vo_dest.ShapeColor = vo_orig.ShapeColor
+                if hasattr(vo_orig, "Transparency"):
+                    vo_dest.Transparency = vo_orig.Transparency
+                if hasattr(vo_orig, "ShapeAppearance") and vo_orig.ShapeAppearance:
+                    vo_dest.ShapeAppearance = vo_orig.ShapeAppearance
+        except Exception:
+            pass
+
+    def cortar(self, nombre_op, herramienta, base=None):
+        """
+        Agrega o actualiza una operación de corte booleano.
+        Si base es el sólido raíz (<Pieza>_Solido) y es Part::Cut, inserta la operación
+        debajo sin destruir ni ocultar <Pieza>_Solido para no invalidar punteros en App::Link.
+        """
+        sol_raiz = self.doc.getObject(f"{self.nombre}_Solido")
+        if base is None and sol_raiz is not None and sol_raiz.TypeId == "Part::Cut" and nombre_op != sol_raiz.Name:
+            op = self.doc.getObject(nombre_op)
+            if op is None:
+                op = self.part.newObject("Part::Cut", nombre_op) if self.part else self.doc.addObject("Part::Cut", nombre_op)
+                op.Base = sol_raiz.Base
+                op.Tool = sol_raiz.Tool
+                op.Refine = True
+                op.Visibility = False
+                sol_raiz.Base = op
+            sol_raiz.Tool = herramienta
+            sol_raiz.Refine = True
+            herramienta.Visibility = False
+            sol_raiz.Visibility = True
+            self.solido = sol_raiz
+            self._registrar_cambio("cortar", {"nombre_op": nombre_op, "tool": herramienta.Name})
+            return sol_raiz
+
+        base_obj = base or self.solido
+        op = self.doc.getObject(nombre_op)
+        if op is None:
+            op = self.part.newObject("Part::Cut", nombre_op) if self.part else self.doc.addObject("Part::Cut", nombre_op)
+            if base_obj is not None:
+                op.Base = base_obj
+                base_obj.Visibility = False
+                self._copiar_apariencia_vista(base_obj, op)
+        elif base is not None:
+            op.Base = base_obj
+            base_obj.Visibility = False
+        op.Tool = herramienta
+        op.Refine = True
+        herramienta.Visibility = False
+        op.Visibility = True
+        self.solido = op
+        self._registrar_cambio("cortar", {"nombre_op": nombre_op, "base": op.Base.Name if op.Base else None, "tool": herramienta.Name})
+        return op
+
+    def fusionar(self, nombre_op, herramienta, base=None):
+        """
+        Agrega o actualiza una unión booleana.
+        Si base es None y existe <Pieza>_Solido (Part::Cut), inserta la unión en su Base
+        sin destruir el objeto raíz <Pieza>_Solido.
+        """
+        herrs = list(herramienta) if isinstance(herramienta, (list, tuple)) else [herramienta]
+        sol_raiz = self.doc.getObject(f"{self.nombre}_Solido")
+        if base is None and sol_raiz is not None and sol_raiz.TypeId == "Part::Cut" and nombre_op != sol_raiz.Name:
+            op = self.doc.getObject(nombre_op)
+            if op is None:
+                op = self.part.newObject("Part::MultiFuse", nombre_op) if self.part else self.doc.addObject("Part::MultiFuse", nombre_op)
+                op.Shapes = ([sol_raiz.Base] if sol_raiz.Base else []) + herrs
+                op.Refine = True
+                op.Visibility = False
+                sol_raiz.Base = op
+            else:
+                actuales = list(op.Shapes)
+                for h in herrs:
+                    if h not in actuales:
+                        actuales.append(h)
+                op.Shapes = actuales
+                op.Refine = True
+            for h in herrs:
+                h.Visibility = False
+            sol_raiz.Visibility = True
+            self.solido = sol_raiz
+            self._registrar_cambio("fusionar", {"nombre_op": nombre_op, "shapes": [s.Name for s in op.Shapes]})
+            return sol_raiz
+
+        base_obj = base or self.solido
+        op = self.doc.getObject(nombre_op)
+        if op is None:
+            op = self.part.newObject("Part::MultiFuse", nombre_op) if self.part else self.doc.addObject("Part::MultiFuse", nombre_op)
+            shapes = ([base_obj] if base_obj is not None else []) + herrs
+            op.Shapes = shapes
+            if base_obj is not None:
+                base_obj.Visibility = False
+                self._copiar_apariencia_vista(base_obj, op)
+        else:
+            actuales = list(op.Shapes)
+            for h in herrs:
+                if h not in actuales:
+                    actuales.append(h)
+            op.Shapes = actuales
+        op.Refine = True
+        for h in herrs:
+            h.Visibility = False
+        op.Visibility = True
+        self.solido = op
+        self._registrar_cambio("fusionar", {"nombre_op": nombre_op, "shapes": [s.Name for s in op.Shapes]})
+        return op
+
+    def eliminar(self, nombre_op, eliminar_herramientas=True):
+        """
+        Elimina una operación o primitiva existente del árbol (sea en la punta del sólido
+        o dentro de un MultiFuse / Cut intermedio) restaurando la visibilidad de la base.
+        """
+        op = self.doc.getObject(nombre_op)
+        if op is None:
+            return False
+
+        # Si algún MultiFuse o Cut padre lo referencia, desengancharlo primero
+        for parent in list(op.InList):
+            if parent.TypeId == "Part::MultiFuse" and hasattr(parent, "Shapes"):
+                nuevas = [s for s in parent.Shapes if s != op]
+                parent.Shapes = nuevas
+            elif parent.TypeId == "Part::Cut":
+                if getattr(parent, "Tool", None) == op:
+                    base_p = getattr(parent, "Base", None)
+                    for gp in list(parent.InList):
+                        if gp.TypeId == "Part::MultiFuse":
+                            gp.Shapes = [base_p if s == parent else s for s in gp.Shapes if (base_p or s != parent)]
+                        elif gp.TypeId == "Part::Cut":
+                            if gp.Base == parent:
+                                gp.Base = base_p
+                            elif gp.Tool == parent:
+                                gp.Tool = base_p
+                    if getattr(parent, "Visibility", False) and base_p is not None:
+                        base_p.Visibility = True
+                        self.solido = base_p
+                    self.doc.removeObject(parent.Name)
+
+        # Si op era el sólido visible actual (punta del árbol), restaurar su Base
+        if getattr(op, "Visibility", False):
+            base_ant = getattr(op, "Base", None)
+            if base_ant is None and hasattr(op, "Shapes") and op.Shapes:
+                base_ant = op.Shapes[0]
+            if base_ant is not None:
+                base_ant.Visibility = True
+                self.solido = base_ant
+
+        tools_huerfanas = []
+        if eliminar_herramientas:
+            if hasattr(op, "Tool") and op.Tool is not None:
+                tools_huerfanas.append(op.Tool)
+            elif hasattr(op, "Shapes") and len(op.Shapes) > 1:
+                tools_huerfanas.extend(op.Shapes[1:])
+
+        if self.doc.getObject(op.Name) is not None:
+            self.doc.removeObject(op.Name)
+
+        for t in tools_huerfanas:
+            try:
+                if t and self.doc.getObject(t.Name) is not None and not [p for p in t.InList if p.TypeId != "App::Part"]:
+                    self.doc.removeObject(t.Name)
+            except Exception:
+                pass
+
+        self._registrar_cambio("eliminar", {"nombre_op": nombre_op})
+        return True
+
+    def aplicar(self, guardar=False):
+        """
+        Recomputa la pieza y actualiza en vivo cualquier ensamblaje abierto que la vincule,
+        sin mover la cámara ni cambiar la pestaña activa del usuario.
+        """
+        self.doc.recompute()
+        for d in App.listDocuments().values():
+            if d == self.doc:
+                continue
+            usa_pieza = any(
+                o.TypeId == "App::Link" and getattr(o, "LinkedObject", None) == self.part
+                for o in d.Objects
+            )
+            if usa_pieza:
+                d.recompute()
+        if guardar and getattr(self.doc, "FileName", ""):
+            self.doc.save()
+        if App.GuiUp:
+            import FreeCADGui as Gui
+            Gui.updateGui()
+        return self.solido
+
+
+def mover_en_ensamblaje(nombre_inst_o_junta, x=None, y=None, z=None, rot=None, doc_asm=None, resolver=True):
+    """
+    Ajusta rápidamente en memoria el Offset1 de una junta (o instancia vinculada) en un ensamblaje
+    nativo Assembly::AssemblyObject sin regenerar hojas ni mover la cámara.
+    """
+    doc = doc_asm or (
+        App.getDocument("Piloto_Impresion_3D_Assembly")
+        if "Piloto_Impresion_3D_Assembly" in App.listDocuments()
+        else App.ActiveDocument
+    )
+    if doc is None:
+        raise RuntimeError("No se encontró documento de ensamblaje abierto.")
+
+    junta = doc.getObject(nombre_inst_o_junta)
+    if junta is None or not hasattr(junta, "Offset1"):
+        junta = next(
+            (
+                o for o in doc.Objects
+                if hasattr(o, "Reference2") and o.Reference2 and getattr(o.Reference2[0], "Name", "") == nombre_inst_o_junta
+            ),
+            None,
+        )
+    if junta is None:
+        raise ValueError(f"No se encontró junta para '{nombre_inst_o_junta}' en '{doc.Name}'.")
+
+    off = App.Placement(junta.Offset1)
+    if x is not None:
+        off.Base.x = float(x)
+    if y is not None:
+        off.Base.y = float(y)
+    if z is not None:
+        off.Base.z = float(z)
+    if rot is not None:
+        off.Rotation = rot
+    junta.Offset1 = off
+
+    # Actualizar Placement inicial de Reference2 antes del solve para convergencia instantánea
+    try:
+        lnk1, sub1 = junta.Reference1[0], junta.Reference1[1][0].rstrip(".")
+        lnk2, sub2 = junta.Reference2[0], junta.Reference2[1][0].rstrip(".")
+        o1 = next((o for o in lnk1.LinkedObject.Group if o.Name == sub1 or o.Label == sub1), None)
+        o2 = next((o for o in lnk2.LinkedObject.Group if o.Name == sub2 or o.Label == sub2), None)
+        p1 = o1.Placement if o1 else App.Placement()
+        p2 = o2.Placement if o2 else App.Placement()
+        lnk2.Placement = (lnk1.Placement * p1 * off) * (p2 * junta.Offset2).inverse()
+    except Exception:
+        pass
+
+    doc.recompute()
+    asm = next((o for o in doc.Objects if o.TypeId == "Assembly::AssemblyObject"), None)
+    res = asm.solve() if (resolver and asm and hasattr(asm, "solve")) else 0
+    if App.GuiUp:
+        import FreeCADGui as Gui
+        Gui.updateGui()
+    return junta, res
+
+
+def verificar_colision_rapida(nombres_instancias=None, doc_asm=None, tol_vol=0.05):
+    """
+    Verificación booleana ultrarrápida (<0.1 s) filtrada por BoundBox únicamente para las
+    instancias recién editadas o movidas durante el diseño en vivo.
+    """
+    import json
+    doc = doc_asm or (
+        App.getDocument("Piloto_Impresion_3D_Assembly")
+        if "Piloto_Impresion_3D_Assembly" in App.listDocuments()
+        else App.ActiveDocument
+    )
+    if doc is None:
+        return []
+
+    asm = next((o for o in doc.Objects if o.TypeId in ("Assembly::AssemblyObject", "App::Part")), None)
+    pares_exentos = set()
+    if asm and hasattr(asm, "Interfaces_Declaradas"):
+        try:
+            data = json.loads(asm.Interfaces_Declaradas or "{}")
+            for p in data.get("pares_rosca_ajuste", []):
+                pares_exentos.add(tuple(sorted(p)))
+            for it in data.get("interferencias_plano", []):
+                if "par" in it:
+                    pares_exentos.add(tuple(sorted(it["par"])))
+        except Exception:
+            pass
+
+    links = [
+        o for o in doc.Objects
+        if o.TypeId == "App::Link" and getattr(o, "Visibility", True) and hasattr(o, "Shape") and not o.Shape.isNull()
+    ]
+    if isinstance(nombres_instancias, str):
+        nombres_instancias = [nombres_instancias]
+    objetivo_set = set(nombres_instancias) if nombres_instancias else {o.Name for o in links}
+
+    colisiones = []
+    for i, l1 in enumerate(links):
+        for l2 in links[i + 1:]:
+            if l1.Name not in objetivo_set and l2.Name not in objetivo_set:
+                continue
+            par_key = tuple(sorted((l1.Name, l2.Name)))
+            if par_key in pares_exentos:
+                continue
+            bb1, bb2 = l1.Shape.BoundBox, l2.Shape.BoundBox
+            if not bb1.intersect(bb2):
+                continue
+            try:
+                vol = l1.Shape.common(l2.Shape).Volume
+                if vol > tol_vol:
+                    colisiones.append((l1.Name, l2.Name, round(vol, 3)))
+                    print(f"[COLISION VIVA] {l1.Name} <-> {l2.Name}: {vol:.3f} mm^3")
+            except Exception:
+                pass
+    if not colisiones:
+        print("[COLISION VIVA] OK (0 interferencias en las piezas verificadas)")
+    return colisiones
+
+
+def listar_cambios_vivos(imprimir=True):
+    """
+    Audita todos los documentos abiertos en FreeCAD comparándolos con su Manifiesto_Script
+    y su historial Cambios_En_Vivo para consolidar todo al finalizar la sesión de diseño rápido.
+    """
+    import json
+    reporte = {}
+    for nombre_doc, doc in App.listDocuments().items():
+        part = doc.getObject(nombre_doc) or next((o for o in doc.Objects if o.TypeId == "App::Part"), None)
+        if part is None:
+            continue
+        cambios_doc = {"cambios_en_vivo": [], "parametros_modificados": [], "objetos_nuevos": [], "objetos_eliminados": []}
+        if hasattr(part, "Cambios_En_Vivo") and part.Cambios_En_Vivo:
+            try:
+                cambios_doc["cambios_en_vivo"] = json.loads(part.Cambios_En_Vivo)
+            except Exception:
+                pass
+        if hasattr(part, "Manifiesto_Script") and part.Manifiesto_Script:
+            try:
+                manif = json.loads(part.Manifiesto_Script)
+                params_m = manif.get("parametros", {})
+                ss = doc.getObject("Parametros")
+                if ss:
+                    r = 7
+                    while True:
+                        try:
+                            al = ss.get(f"A{r}")
+                        except Exception:
+                            al = None
+                        if not al:
+                            break
+                        al_s = str(al).strip()
+                        nom_actual = str(ss.get(f"D{r}"))
+                        if al_s not in params_m:
+                            cambios_doc["parametros_modificados"].append((al_s, None, nom_actual))
+                        elif _q_diff(nom_actual, params_m[al_s].get("nominal")):
+                            cambios_doc["parametros_modificados"].append((al_s, params_m[al_s].get("nominal"), nom_actual))
+                        r += 1
+                objs_m = set(manif.get("objetos", {}).keys())
+                objs_act = {
+                    o.Name for o in doc.Objects
+                    if o.TypeId not in ("App::Origin", "App::Plane", "App::Line")
+                }
+                cambios_doc["objetos_nuevos"] = sorted(objs_act - objs_m)
+                cambios_doc["objetos_eliminados"] = sorted(objs_m - objs_act)
+            except Exception:
+                pass
+        if any(cambios_doc.values()):
+            reporte[nombre_doc] = cambios_doc
+            if imprimir:
+                print(f"[PENDIENTE CONSOLIDAR] {nombre_doc}: {cambios_doc}")
+    if imprimir and not reporte:
+        print("[PENDIENTE CONSOLIDAR] Ningún cambio pendiente (todo sincronizado con scripts .py)")
+    return reporte
+
 

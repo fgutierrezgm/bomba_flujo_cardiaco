@@ -132,18 +132,29 @@ class MaterialSyncObserver:
             )
 
     def slotActivatedDocument(self, doc):
-        self.sanear_juntas_assembly(doc)
-        self.sincronizar_modo_diseno_global(doc)
-        self.sincronizar_rotulos_planos(doc)
+        if self._in_sync or not doc:
+            return
+        self._in_sync = True
+        try:
+            self.sanear_juntas_assembly(doc)
+            self.sincronizar_rotulos_planos(doc)
+        finally:
+            self._in_sync = False
 
     def slotCreatedDocument(self, doc):
+        if self._in_sync or not doc:
+            return
         self.sanear_juntas_assembly(doc)
 
     def slotChangedObject(self, obj, prop):
         if self._in_sync or not obj:
             return
-        if obj.Name == "Parametros_Generales":
-            self.sincronizar_modo_diseno_global(obj.Document)
+        if obj.Name == "Parametros_Generales" and prop in ("B3", "modo_diseno_global"):
+            self._in_sync = True
+            try:
+                self.sincronizar_modo_diseno_global(obj.Document)
+            finally:
+                self._in_sync = False
         elif obj.Name == "Datos_Rotulo":
             self.sincronizar_rotulos_planos(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
@@ -152,19 +163,20 @@ class MaterialSyncObserver:
     def slotRecomputedObject(self, obj):
         if self._in_sync or not obj:
             return
-        if obj.Name == "Parametros_Generales":
-            self.sincronizar_modo_diseno_global(obj.Document)
-        elif obj.Name == "Datos_Rotulo":
+        if obj.Name == "Datos_Rotulo":
             self.sincronizar_rotulos_planos(obj.Document)
         elif obj.Name in ("Materiales_Generales", "Materiales"):
             self.sync_document(obj.Document)
 
     def slotFinishRecomputeDocument(self, doc):
-        self.sanear_juntas_assembly(doc)
-        self.sincronizar_modo_diseno_global(doc)
-        self.sincronizar_rotulos_planos(doc)
         if self._in_sync or not doc:
             return
+        self._in_sync = True
+        try:
+            self.sanear_juntas_assembly(doc)
+            self.sincronizar_rotulos_planos(doc)
+        finally:
+            self._in_sync = False
         if doc.getObject("Materiales_Generales") or doc.getObject("Materiales"):
             self.sync_document(doc)
 
@@ -277,3 +289,21 @@ if App.GuiUp:
     App.addDocumentObserver(obs)
     if App.ActiveDocument:
         obs.sync_document(App.ActiveDocument)
+
+    # Auto-iniciar MCP Bridge en loopback al abrir la GUI para diseño rápido en vivo
+    try:
+        from PySide.QtCore import QTimer
+
+        def _autostart_mcp_bridge():
+            try:
+                from freecad.mcp_bridge import bridge
+                if not bridge.is_running():
+                    bridge.start()
+                if hasattr(App, "MCPBridgeInjectUi"):
+                    App.MCPBridgeInjectUi()
+            except Exception:
+                pass
+
+        QTimer.singleShot(1500, _autostart_mcp_bridge)
+    except Exception:
+        pass
